@@ -55,14 +55,11 @@ window.ProcMario = window.ProcMario || {};
 
   Coin.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-    var widths = [12, 8, 4, 8];
-    var coinW = widths[this.animFrame];
-    var cx = pos.x + 8 - coinW / 2;
-
-    ctx.fillStyle = '#FFD700';
-    ctx.fillRect(cx, pos.y + 2, coinW, 12);
-    ctx.fillStyle = '#FFA500';
-    ctx.fillRect(cx + 1, pos.y + 3, Math.max(1, coinW - 2), 10);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      var spriteName = 'coin_frame' + (this.animFrame + 1);
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false);
+    }
   };
 
   // ── Popup Coin (from question block, visual only) ──
@@ -164,22 +161,10 @@ window.ProcMario = window.ProcMario || {};
 
   Mushroom.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-
-    // Cap (red with white spots)
-    ctx.fillStyle = '#CC0000';
-    ctx.fillRect(pos.x, pos.y, 16, 10);
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 2, pos.y + 2, 4, 4);
-    ctx.fillRect(pos.x + 10, pos.y + 2, 4, 4);
-
-    // Stem (white)
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 3, pos.y + 10, 10, 6);
-
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(pos.x + 5, pos.y + 11, 2, 2);
-    ctx.fillRect(pos.x + 9, pos.y + 11, 2, 2);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      ProcMario.drawSprite(ctx, ss, 'mushroom', pos.x, pos.y, false);
+    }
   };
 
   // ── 1-Up Mushroom ──
@@ -226,22 +211,10 @@ window.ProcMario = window.ProcMario || {};
 
   OneUpMushroom.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-
-    // Cap (green with white spots)
-    ctx.fillStyle = '#00AA00';
-    ctx.fillRect(pos.x, pos.y, 16, 10);
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 2, pos.y + 2, 4, 4);
-    ctx.fillRect(pos.x + 10, pos.y + 2, 4, 4);
-
-    // Stem
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 3, pos.y + 10, 10, 6);
-
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(pos.x + 5, pos.y + 11, 2, 2);
-    ctx.fillRect(pos.x + 9, pos.y + 11, 2, 2);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      ProcMario.drawSprite(ctx, ss, '1up_mushroom', pos.x, pos.y, false);
+    }
   };
 
   // ── Fire Flower ──
@@ -293,26 +266,11 @@ window.ProcMario = window.ProcMario || {};
 
   FireFlower.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-
-    // Stem
-    ctx.fillStyle = '#228B22';
-    ctx.fillRect(pos.x + 5, pos.y + 8, 6, 8);
-
-    // Leaves
-    ctx.fillStyle = '#00AA00';
-    ctx.fillRect(pos.x + 1, pos.y + 10, 5, 3);
-    ctx.fillRect(pos.x + 10, pos.y + 10, 5, 3);
-
-    // Flower petals
-    var colors = this.animFrame === 0 ? ['#FF4500', '#FFD700'] : ['#FFD700', '#FF4500'];
-    ctx.fillStyle = colors[0];
-    ctx.fillRect(pos.x + 2, pos.y, 12, 10);
-    ctx.fillStyle = colors[1];
-    ctx.fillRect(pos.x + 5, pos.y + 2, 6, 6);
-
-    // Center
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 6, pos.y + 3, 4, 4);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      var spriteName = this.animFrame === 0 ? 'fire_flower_frame1' : 'fire_flower_frame2';
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false);
+    }
   };
 
   // ── Star (invincibility) ──
@@ -386,29 +344,11 @@ window.ProcMario = window.ProcMario || {};
 
   Star.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-    var colors = ['#FFD700', '#FFF', '#FF8C00', '#FFFF00'];
-    var color = colors[this.colorIndex];
-
-    // Star shape (simplified as diamond)
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(pos.x + 8, pos.y);
-    ctx.lineTo(pos.x + 12, pos.y + 5);
-    ctx.lineTo(pos.x + 16, pos.y + 6);
-    ctx.lineTo(pos.x + 13, pos.y + 10);
-    ctx.lineTo(pos.x + 14, pos.y + 16);
-    ctx.lineTo(pos.x + 8, pos.y + 12);
-    ctx.lineTo(pos.x + 2, pos.y + 16);
-    ctx.lineTo(pos.x + 3, pos.y + 10);
-    ctx.lineTo(pos.x, pos.y + 6);
-    ctx.lineTo(pos.x + 4, pos.y + 5);
-    ctx.closePath();
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(pos.x + 5, pos.y + 6, 2, 2);
-    ctx.fillRect(pos.x + 9, pos.y + 6, 2, 2);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      var spriteName = this.colorIndex % 2 === 0 ? 'star_frame1' : 'star_frame2';
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false);
+    }
   };
 
   // ── Fireball (player projectile) ──

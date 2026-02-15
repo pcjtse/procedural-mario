@@ -54,6 +54,7 @@ window.ProcMario = window.ProcMario || {};
    */
   Renderer.prototype.init = function() {
     this.spriteSheet = new ProcMario.SpriteSheet();
+    ProcMario.spriteSheet = this.spriteSheet; // global access for entity rendering
   };
 
   /**

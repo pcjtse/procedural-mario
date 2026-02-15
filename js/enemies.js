@@ -136,46 +136,30 @@ window.ProcMario = window.ProcMario || {};
 
   Goomba.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
+    var ss = ProcMario.spriteSheet;
 
     if (this.dying && this.dyingStyle === 'flip') {
-      // Flipped upside down
       ctx.save();
       ctx.translate(pos.x + this.w / 2, pos.y + this.h / 2);
       ctx.scale(1, -1);
-      ctx.fillStyle = '#8B4513';
-      ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
-      ctx.fillStyle = '#FFF';
-      ctx.fillRect(-4, -2, 3, 3);
-      ctx.fillRect(2, -2, 3, 3);
+      if (ss) {
+        var spr = ss.getSprite('goomba_walk1', false);
+        if (spr) ctx.drawImage(spr, -this.w / 2, -this.h / 2);
+      }
       ctx.restore();
       return;
     }
 
-    // Body - brown
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(pos.x, pos.y, this.w, this.h);
-
     if (this.dying && this.dyingStyle === 'squish') {
-      // Squished: flat brown rectangle
+      if (ss) {
+        ProcMario.drawSprite(ctx, ss, 'goomba_squished', pos.x, pos.y, false);
+      }
       return;
     }
 
-    // Eyes
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 3, pos.y + 3, 4, 4);
-    ctx.fillRect(pos.x + 9, pos.y + 3, 4, 4);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(pos.x + 4, pos.y + 4, 2, 2);
-    ctx.fillRect(pos.x + 10, pos.y + 4, 2, 2);
-
-    // Feet - animation
-    ctx.fillStyle = '#654321';
-    if (this.animFrame === 0) {
-      ctx.fillRect(pos.x + 1, pos.y + 13, 5, 3);
-      ctx.fillRect(pos.x + 10, pos.y + 13, 5, 3);
-    } else {
-      ctx.fillRect(pos.x + 3, pos.y + 13, 5, 3);
-      ctx.fillRect(pos.x + 8, pos.y + 13, 5, 3);
+    var spriteName = this.animFrame === 0 ? 'goomba_walk1' : 'goomba_walk2';
+    if (ss) {
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false);
     }
   };
 
@@ -367,56 +351,31 @@ window.ProcMario = window.ProcMario || {};
 
   Koopa.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
+    var ss = ProcMario.spriteSheet;
 
     if (this.dying) {
-      // Flipped
       ctx.save();
       ctx.translate(pos.x + this.w / 2, pos.y + this.h / 2);
       ctx.scale(1, -1);
-      ctx.fillStyle = '#228B22';
-      ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+      if (ss) {
+        var spr = ss.getSprite('koopa_walk1', false);
+        if (spr) ctx.drawImage(spr, -this.w / 2, -this.h / 2);
+      }
       ctx.restore();
       return;
     }
 
     if (this.state === 'shell' || this.state === 'shell_moving') {
-      // Green shell
-      ctx.fillStyle = '#228B22';
-      ctx.fillRect(pos.x, pos.y, this.w, this.h);
-      ctx.fillStyle = '#90EE90';
-      ctx.fillRect(pos.x + 3, pos.y + 3, this.w - 6, this.h - 6);
-      // Shell pattern
-      ctx.fillStyle = '#228B22';
-      ctx.fillRect(pos.x + 6, pos.y + 2, 4, this.h - 4);
+      if (ss) {
+        ProcMario.drawSprite(ctx, ss, 'koopa_shell', pos.x, pos.y, false);
+      }
       return;
     }
 
-    // Walking koopa
-    // Shell (body)
-    ctx.fillStyle = '#228B22';
-    ctx.fillRect(pos.x + 1, pos.y + 6, 14, 12);
-    ctx.fillStyle = '#90EE90';
-    ctx.fillRect(pos.x + 4, pos.y + 8, 8, 8);
-
-    // Head
-    ctx.fillStyle = '#FFDAB9';
-    var headX = this.facing < 0 ? pos.x : pos.x + 6;
-    ctx.fillRect(headX, pos.y, 10, 10);
-
-    // Eye
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(headX + 3, pos.y + 2, 4, 4);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(headX + 4, pos.y + 3, 2, 2);
-
-    // Feet
-    ctx.fillStyle = '#FF8C00';
-    if (this.animFrame === 0) {
-      ctx.fillRect(pos.x + 2, pos.y + 20, 5, 4);
-      ctx.fillRect(pos.x + 9, pos.y + 20, 5, 4);
-    } else {
-      ctx.fillRect(pos.x + 1, pos.y + 20, 5, 4);
-      ctx.fillRect(pos.x + 10, pos.y + 20, 5, 4);
+    var spriteName = this.animFrame === 0 ? 'koopa_walk1' : 'koopa_walk2';
+    var flipped = this.facing > 0;
+    if (ss) {
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, flipped);
     }
   };
 
@@ -521,34 +480,25 @@ window.ProcMario = window.ProcMario || {};
     if (this.state === 'hidden' && !this.dying) return;
 
     var pos = camera.worldToScreen(this.x, this.y);
+    var ss = ProcMario.spriteSheet;
 
     if (this.dying) {
       ctx.save();
       ctx.translate(pos.x + this.w / 2, pos.y + this.h / 2);
       ctx.scale(1, -1);
-      ctx.fillStyle = '#CC0000';
-      ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+      if (ss) {
+        var spr = ss.getSprite('piranha_frame1', false);
+        if (spr) ctx.drawImage(spr, -this.w / 2, -this.h / 2);
+      }
       ctx.restore();
       return;
     }
 
-    // Head (top half)
-    ctx.fillStyle = '#CC0000';
-    ctx.fillRect(pos.x, pos.y, this.w, 12);
-
-    // Teeth/mouth
-    ctx.fillStyle = '#FFF';
-    ctx.fillRect(pos.x + 2, pos.y + 8, 3, 4);
-    ctx.fillRect(pos.x + 7, pos.y + 8, 3, 4);
-    ctx.fillRect(pos.x + 11, pos.y + 8, 3, 4);
-
-    // Stem
-    ctx.fillStyle = '#228B22';
-    ctx.fillRect(pos.x + 4, pos.y + 12, 8, 12);
-
-    // Lip detail
-    ctx.fillStyle = '#FF4444';
-    ctx.fillRect(pos.x - 1, pos.y + 4, this.w + 2, 4);
+    var frame = Math.floor(Date.now() / 200) % 2;
+    var spriteName = frame === 0 ? 'piranha_frame1' : 'piranha_frame2';
+    if (ss) {
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false);
+    }
   };
 
   // ── Factory: create enemy from level generator entity data ──
