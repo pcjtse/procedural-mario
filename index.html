@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procedural Mario</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="scanlines"></div>
+  </div>
+
+  <!-- Global namespace -->
+  <script>window.ProcMario = {};</script>
+
+  <!-- Core engine (order matters: physics → camera → engine) -->
+  <script src="js/physics.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/engine.js"></script>
+
+  <!-- Tile system (tiles → tilemap → level generator) -->
+  <script src="js/tiles.js"></script>
+  <script src="js/tilemap.js"></script>
+  <script src="js/levelgen.js"></script>
+
+  <!-- Pixel art, sprites, rendering, audio -->
+  <script src="js/pixelart.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/audio.js"></script>
+
+  <!-- Game entities (player → enemies → items → blocks → objects) -->
+  <script src="js/player.js"></script>
+  <script src="js/enemies.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/blocks.js"></script>
+  <script src="js/objects.js"></script>
+
+  <!-- Main game orchestration (must be last) -->
+  <script src="js/main.js"></script>
+</body>
+</html>
