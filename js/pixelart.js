@@ -687,6 +687,52 @@ window.ProcMario = window.ProcMario || {};
     return g;
   })();
 
+  // ===== THEME PALETTE HELPERS =====
+
+  /**
+   * Create a copy of a base palette with specific indices replaced.
+   * @param {Array} base - original palette array
+   * @param {Object} overrides - { index: color } pairs
+   * @returns {Array}
+   */
+  function makeThemePalette(base, overrides) {
+    var p = base.slice();
+    for (var i in overrides) {
+      if (overrides.hasOwnProperty(i)) p[i] = overrides[i];
+    }
+    return p;
+  }
+
+  // Underground: earth tones → dark stone
+  var UNDERGROUND_PALETTE = makeThemePalette(PALETTE, {
+    6:  '#5A5A5A',  // green  → slate gray
+    7:  '#484848',  // brown  → dark gray
+    9:  '#6A6A6A',  // orange → gray (brick face)
+    10: '#222222',  // dark brown → near black (mortar)
+    14: '#686868',  // pipe green → mid gray
+    19: '#181818'   // dark green → very dark
+  });
+
+  // Sky: earth tones → cloud blues
+  var SKY_PALETTE = makeThemePalette(PALETTE, {
+    6:  '#B8E4FF',  // green  → light sky blue
+    7:  '#8AC0E0',  // brown  → steel blue
+    9:  '#A0C8E8',  // orange → blue (brick face)
+    10: '#6090B0',  // dark brown → blue-gray (mortar)
+    14: '#A0D8F0',  // pipe green → light blue
+    19: '#5080A0'   // dark green → darker blue
+  });
+
+  // Castle: earth tones → dark stone
+  var CASTLE_PALETTE = makeThemePalette(PALETTE, {
+    6:  '#444444',  // green  → dark stone
+    7:  '#363636',  // brown  → darker stone
+    9:  '#4A4A4A',  // orange → stone (brick face)
+    10: '#1C1C1C',  // dark brown → near black (mortar)
+    14: '#555555',  // pipe green → stone
+    19: '#141414'   // dark green → very dark
+  });
+
   // ===== BACKGROUND ELEMENTS =====
   var cloudSprite = (function() {
     var g = emptyGrid(48, 24);
@@ -880,6 +926,38 @@ window.ProcMario = window.ProcMario || {};
     this._addSprite('cloud', cloudSprite, p);
     this._addSprite('hill', hillSprite, p);
     this._addSprite('bush', bushSprite, p);
+
+    // ── Underground tile variants (dark stone cave) ──
+    // ground_top uses the plain brick pattern (no grass) for cave floor look
+    this._addSprite('ug_ground',          groundTile,    UNDERGROUND_PALETTE);
+    this._addSprite('ug_ground_top',      groundTile,    UNDERGROUND_PALETTE);
+    this._addSprite('ug_brick',           brickTile,     UNDERGROUND_PALETTE);
+    this._addSprite('ug_hard_block',      hardBlockTile, UNDERGROUND_PALETTE);
+    this._addSprite('ug_pipe_top_left',   pipeTopLeft,   UNDERGROUND_PALETTE);
+    this._addSprite('ug_pipe_top_right',  pipeTopRight,  UNDERGROUND_PALETTE);
+    this._addSprite('ug_pipe_body_left',  pipeBodyLeft,  UNDERGROUND_PALETTE);
+    this._addSprite('ug_pipe_body_right', pipeBodyRight, UNDERGROUND_PALETTE);
+
+    // ── Sky tile variants (cloud blues) ──
+    this._addSprite('sky_ground',          groundTile,    SKY_PALETTE);
+    this._addSprite('sky_ground_top',      groundTopTile, SKY_PALETTE);
+    this._addSprite('sky_brick',           brickTile,     SKY_PALETTE);
+    this._addSprite('sky_hard_block',      hardBlockTile, SKY_PALETTE);
+    this._addSprite('sky_pipe_top_left',   pipeTopLeft,   SKY_PALETTE);
+    this._addSprite('sky_pipe_top_right',  pipeTopRight,  SKY_PALETTE);
+    this._addSprite('sky_pipe_body_left',  pipeBodyLeft,  SKY_PALETTE);
+    this._addSprite('sky_pipe_body_right', pipeBodyRight, SKY_PALETTE);
+
+    // ── Castle tile variants (dark stone) ──
+    // ground_top uses plain brick (no grass) so it looks like a stone floor
+    this._addSprite('castle_ground',          groundTile,    CASTLE_PALETTE);
+    this._addSprite('castle_ground_top',      groundTile,    CASTLE_PALETTE);
+    this._addSprite('castle_brick',           brickTile,     CASTLE_PALETTE);
+    this._addSprite('castle_hard_block',      hardBlockTile, CASTLE_PALETTE);
+    this._addSprite('castle_pipe_top_left',   pipeTopLeft,   CASTLE_PALETTE);
+    this._addSprite('castle_pipe_top_right',  pipeTopRight,  CASTLE_PALETTE);
+    this._addSprite('castle_pipe_body_left',  pipeBodyLeft,  CASTLE_PALETTE);
+    this._addSprite('castle_pipe_body_right', pipeBodyRight, CASTLE_PALETTE);
   };
 
   SpriteSheet.prototype._addSprite = function(name, pixelData, palette) {

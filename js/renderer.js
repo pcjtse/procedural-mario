@@ -47,6 +47,7 @@ window.ProcMario = window.ProcMario || {};
     this.bgClouds = [];
     this.bgHills = [];
     this.bgBushes = [];
+    this.bgStalactites = [];  // underground
   }
 
   /**
@@ -58,36 +59,57 @@ window.ProcMario = window.ProcMario || {};
   };
 
   /**
-   * Generate background decorations for a level
+   * Generate background decorations for a level.
+   * @param {number} levelWidth - pixel width of the full level
+   * @param {string} theme      - one of 'overworld', 'underground', 'sky', 'castle'
    */
-  Renderer.prototype.generateBackground = function(levelWidth) {
-    this.bgClouds = [];
-    this.bgHills = [];
-    this.bgBushes = [];
+  Renderer.prototype.generateBackground = function(levelWidth, theme) {
+    theme = theme || 'overworld';
+    this.bgClouds      = [];
+    this.bgHills       = [];
+    this.bgBushes      = [];
+    this.bgStalactites = [];
 
-    // Clouds every ~120 pixels
-    for (var x = 60; x < levelWidth; x += 100 + Math.random() * 80) {
-      this.bgClouds.push({
-        x: x,
-        y: 20 + Math.random() * 40
-      });
-    }
+    if (theme === 'overworld') {
+      // Clouds every ~120 pixels
+      for (var x = 60; x < levelWidth; x += 100 + Math.random() * 80) {
+        this.bgClouds.push({ x: x, y: 20 + Math.random() * 40 });
+      }
+      // Hills every ~200 pixels
+      for (var x2 = 30; x2 < levelWidth; x2 += 160 + Math.random() * 120) {
+        this.bgHills.push({ x: x2, y: this.height - 32 - 32 });
+      }
+      // Bushes every ~150 pixels
+      for (var x3 = 80; x3 < levelWidth; x3 += 100 + Math.random() * 100) {
+        this.bgBushes.push({ x: x3, y: this.height - 32 - 16 });
+      }
 
-    // Hills every ~200 pixels
-    for (var x2 = 30; x2 < levelWidth; x2 += 160 + Math.random() * 120) {
-      this.bgHills.push({
-        x: x2,
-        y: this.height - 32 - 32  // above ground line
-      });
-    }
+    } else if (theme === 'underground') {
+      // Stalactites hanging from ceiling at world-space positions
+      for (var x4 = 20; x4 < levelWidth; x4 += 24 + Math.random() * 40) {
+        this.bgStalactites.push({
+          x:      x4,
+          height: 8  + Math.random() * 28,
+          width:  6  + Math.random() * 10
+        });
+      }
 
-    // Bushes every ~150 pixels
-    for (var x3 = 80; x3 < levelWidth; x3 += 100 + Math.random() * 100) {
-      this.bgBushes.push({
-        x: x3,
-        y: this.height - 32 - 16  // on the ground
-      });
+    } else if (theme === 'sky') {
+      // Far layer — high, sparse clouds (parallax 0.15x)
+      for (var x5 = 20; x5 < levelWidth; x5 += 70 + Math.random() * 60) {
+        this.bgClouds.push({ x: x5, y: 8 + Math.random() * 50, layer: 0 });
+      }
+      // Mid layer — medium clouds (parallax 0.4x)
+      for (var x6 = 40; x6 < levelWidth; x6 += 90 + Math.random() * 80) {
+        this.bgClouds.push({ x: x6, y: 70 + Math.random() * 60, layer: 1 });
+      }
+      // Near layer — cloud floor near bottom (parallax 0.7x)
+      for (var x7 = 0; x7 < levelWidth; x7 += 55 + Math.random() * 40) {
+        this.bgClouds.push({ x: x7, y: this.height - 70 + Math.random() * 20, layer: 2 });
+      }
+
     }
+    // castle background is drawn procedurally from cam.x, no pre-generation needed
   };
 
   /**
@@ -161,20 +183,35 @@ window.ProcMario = window.ProcMario || {};
 
   // ===== BACKGROUND =====
 
-  Renderer.prototype._renderBackgrounds = function(cam) {
+  /**
+   * Dispatch to the correct theme background renderer.
+   * @param {object} cam
+   * @param {string} theme
+   */
+  Renderer.prototype._renderBackgrounds = function(cam, theme) {
+    theme = theme || 'overworld';
+    switch (theme) {
+      case 'underground': this._renderUndergroundBg(cam); break;
+      case 'sky':         this._renderSkyBg(cam);         break;
+      case 'castle':      this._renderCastleBg(cam);      break;
+      default:            this._renderOverworldBg(cam);
+    }
+  };
+
+  // ── Overworld: clouds / hills / bushes ──
+  Renderer.prototype._renderOverworldBg = function(cam) {
     if (!this.spriteSheet) return;
 
-    // Far layer - clouds at 0.2x scroll
+    // Far layer – clouds at 0.2x scroll
     var cloudOffset = cam.x * 0.2;
     for (var i = 0; i < this.bgClouds.length; i++) {
       var cloud = this.bgClouds[i];
       var cx = cloud.x - cloudOffset;
-      // Wrap clouds
       while (cx < -48) cx += this.width + 96;
       ProcMario.drawSprite(this.ctx, this.spriteSheet, 'cloud', cx, cloud.y, false);
     }
 
-    // Mid layer - hills at 0.5x scroll
+    // Mid layer – hills at 0.5x scroll
     var hillOffset = cam.x * 0.5;
     for (var j = 0; j < this.bgHills.length; j++) {
       var hill = this.bgHills[j];
@@ -184,7 +221,7 @@ window.ProcMario = window.ProcMario || {};
       }
     }
 
-    // Near layer - bushes at 0.8x scroll
+    // Near layer – bushes at 0.8x scroll
     var bushOffset = cam.x * 0.8;
     for (var k = 0; k < this.bgBushes.length; k++) {
       var bush = this.bgBushes[k];
@@ -192,6 +229,65 @@ window.ProcMario = window.ProcMario || {};
       if (bx > -32 && bx < this.width + 32) {
         ProcMario.drawSprite(this.ctx, this.spriteSheet, 'bush', bx, bush.y, false);
       }
+    }
+  };
+
+  // ── Underground: stone ceiling + stalactites ──
+  Renderer.prototype._renderUndergroundBg = function(cam) {
+    var ctx = this.ctx;
+
+    // Solid stone ceiling strip
+    ctx.fillStyle = '#2A2A2A';
+    ctx.fillRect(0, 0, this.width, 10);
+
+    // Individual stalactites at world-space positions (scroll 1:1 with level)
+    ctx.fillStyle = '#1A1A1A';
+    for (var i = 0; i < this.bgStalactites.length; i++) {
+      var s   = this.bgStalactites[i];
+      var sx  = Math.round(s.x - cam.x);
+      if (sx > -32 && sx < this.width + 32) {
+        ctx.fillRect(sx, 0, Math.round(s.width), Math.round(s.height));
+      }
+    }
+  };
+
+  // ── Sky: multi-layer clouds + cloud floor ──
+  Renderer.prototype._renderSkyBg = function(cam) {
+    if (!this.spriteSheet) return;
+
+    var parallax = [0.15, 0.4, 0.7];
+    for (var i = 0; i < this.bgClouds.length; i++) {
+      var c   = this.bgClouds[i];
+      var spd = parallax[c.layer || 0];
+      var cx  = c.x - cam.x * spd;
+      // Wrap far-layer clouds so the sky always feels full
+      if (c.layer === 0) {
+        while (cx < -48) cx += this.width + 96;
+      }
+      if (cx > -48 && cx < this.width + 48) {
+        ProcMario.drawSprite(this.ctx, this.spriteSheet, 'cloud', cx, c.y, false);
+      }
+    }
+  };
+
+  // ── Castle: lava glow + repeating battlement silhouette ──
+  Renderer.prototype._renderCastleBg = function(cam) {
+    var ctx = this.ctx;
+
+    // Lava glow at the bottom of the screen
+    ctx.fillStyle = 'rgba(180,40,0,0.35)';
+    ctx.fillRect(0, this.height - 40, this.width, 40);
+    ctx.fillStyle = 'rgba(255,80,0,0.15)';
+    ctx.fillRect(0, this.height - 72, this.width, 32);
+
+    // Tiling castle battlement silhouette (mid-ground, 0.4x parallax)
+    ctx.fillStyle = '#1A0808';
+    var bOff = Math.floor(cam.x * 0.4) % 64;
+    for (var x = -bOff; x < this.width + 64; x += 64) {
+      var bx = Math.round(x);
+      ctx.fillRect(bx,      this.height - 90, 48, 58);  // wall body
+      ctx.fillRect(bx,      this.height - 106, 18, 16); // left merlon
+      ctx.fillRect(bx + 30, this.height - 106, 18, 16); // right merlon
     }
   };
 

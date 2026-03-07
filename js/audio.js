@@ -217,14 +217,29 @@ window.ProcMario = window.ProcMario || {};
 
   // ===== BACKGROUND MUSIC =====
 
-  AudioManager.prototype.startMusic = function() {
+  /**
+   * Start background music for the given theme.
+   * @param {string} theme - 'overworld' | 'underground' | 'sky' | 'castle'
+   */
+  AudioManager.prototype.startMusic = function(theme) {
     if (!this.ctx || this.musicPlaying) return;
     this.musicPlaying = true;
-    this._playMusicLoop();
+    this.musicTheme   = theme || 'overworld';
+    this._playMusicLoopForTheme();
+  };
+
+  AudioManager.prototype._playMusicLoopForTheme = function() {
+    switch (this.musicTheme) {
+      case 'underground': this._playUndergroundMusicLoop(); break;
+      case 'sky':         this._playSkyMusicLoop();         break;
+      case 'castle':      this._playCastleMusicLoop();      break;
+      default:            this._playMusicLoop();
+    }
   };
 
   AudioManager.prototype.stopMusic = function() {
     this.musicPlaying = false;
+    this.musicTheme   = 'overworld';
     for (var i = 0; i < this.musicNodes.length; i++) {
       try { this.musicNodes[i].stop(); } catch (e) { /* already stopped */ }
     }
@@ -294,6 +309,174 @@ window.ProcMario = window.ProcMario || {};
     setTimeout(function() {
       self.musicNodes = [];
       if (self.musicPlaying) self._playMusicLoop();
+    }, totalDuration * 1000);
+  };
+
+  // ===== THEME MUSIC LOOPS =====
+
+  // ── Underground: A-minor, slow, echo feel ──
+  AudioManager.prototype._playUndergroundMusicLoop = function() {
+    if (!this.ctx || !this.musicPlaying) return;
+    var self  = this;
+    var t     = this.ctx.currentTime + 0.05;
+    var bpm   = 110;
+    var eighth = (60 / bpm) / 2;
+
+    // Melody – A natural minor, dark descending phrases
+    var melody = [
+      220, 0, 220, 0, 261.63, 0, 220, 0,
+      196, 0, 0,   0, 196,    0, 174.61, 0,
+      196, 0, 220, 0, 246.94, 0, 220,    0,
+      0,   0, 196, 0, 196,    0, 0,      0,
+      220, 0, 261.63, 0, 293.66, 0, 261.63, 0,
+      220, 0, 0,      0, 196,    0, 0,      0,
+      174.61, 0, 196, 0, 220, 0, 196, 0,
+      174.61, 0, 0,   0, 0,   0, 0,   0
+    ];
+    // Bass – sustained low drone
+    var bass = [
+      110, 0, 0, 0, 110, 0, 0, 0,
+      98,  0, 0, 0, 98,  0, 0, 0,
+      98,  0, 0, 0, 98,  0, 0, 0,
+      110, 0, 0, 0, 110, 0, 0, 0,
+      110, 0, 0, 0, 130.81, 0, 0, 0,
+      110, 0, 0, 0, 98,     0, 0, 0,
+      87.31, 0, 0, 0, 87.31, 0, 0, 0,
+      110,   0, 0, 0, 0,     0, 0, 0
+    ];
+
+    var totalDuration = melody.length * eighth;
+
+    for (var i = 0; i < melody.length; i++) {
+      if (melody[i] > 0) {
+        var o1 = this._playTone(melody[i], eighth * 0.9, 'triangle', t + i * eighth, 0.07);
+        if (o1) this.musicNodes.push(o1);
+        // Echo: faint repeat slightly offset
+        var o2 = this._playTone(melody[i], eighth * 0.7, 'triangle', t + i * eighth + 0.065, 0.03);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o3 = this._playTone(bass[j], eighth * 1.8, 'sine', t + j * eighth, 0.08);
+        if (o3) this.musicNodes.push(o3);
+      }
+    }
+    // Sparse percussion
+    for (var k = 0; k < melody.length; k += 8) {
+      this._playNoise(0.04, t + k * eighth, 0.03);
+    }
+
+    setTimeout(function() {
+      self.musicNodes = [];
+      if (self.musicPlaying) self._playUndergroundMusicLoop();
+    }, totalDuration * 1000);
+  };
+
+  // ── Sky: G-major, bright, high octave ──
+  AudioManager.prototype._playSkyMusicLoop = function() {
+    if (!this.ctx || !this.musicPlaying) return;
+    var self   = this;
+    var t      = this.ctx.currentTime + 0.05;
+    var eighth = (60 / 150) / 2;
+
+    var melody = [
+      783.99, 0, 880, 0, 987.77, 0, 880, 0,
+      1046.5, 0, 0,   0, 880,    0, 0,   0,
+      783.99, 0, 740, 0, 659.25, 0, 740, 0,
+      783.99, 0, 0,   0, 0,      0, 0,   0,
+      659.25, 0, 740,    0, 783.99, 0, 880,    0,
+      987.77, 0, 0,      0, 1046.5, 0, 0,      0,
+      880,    0, 783.99, 0, 740,    0, 659.25, 0,
+      0,      0, 0,      0, 0,      0, 0,      0
+    ];
+    var bass = [
+      196,    0, 196,    0, 220,    0, 196,    0,
+      261.63, 0, 261.63, 0, 196,    0, 196,    0,
+      185,    0, 185,    0, 164.81, 0, 185,    0,
+      196,    0, 196,    0, 196,    0, 196,    0,
+      164.81, 0, 164.81, 0, 196,    0, 220,    0,
+      246.94, 0, 246.94, 0, 261.63, 0, 246.94, 0,
+      220,    0, 196,    0, 185,    0, 164.81, 0,
+      196,    0, 196,    0, 196,    0, 196,    0
+    ];
+
+    var totalDuration = melody.length * eighth;
+
+    for (var i = 0; i < melody.length; i++) {
+      if (melody[i] > 0) {
+        var o1 = this._playTone(melody[i], eighth * 0.7, 'square', t + i * eighth, 0.05);
+        if (o1) this.musicNodes.push(o1);
+      }
+    }
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o2 = this._playTone(bass[j], eighth * 0.7, 'triangle', t + j * eighth, 0.05);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+    // Light, airy percussion
+    for (var k = 0; k < melody.length; k += 4) {
+      this._playNoise(0.02, t + k * eighth, 0.025);
+    }
+
+    setTimeout(function() {
+      self.musicNodes = [];
+      if (self.musicPlaying) self._playSkyMusicLoop();
+    }, totalDuration * 1000);
+  };
+
+  // ── Castle: D-minor, ominous, driving ──
+  AudioManager.prototype._playCastleMusicLoop = function() {
+    if (!this.ctx || !this.musicPlaying) return;
+    var self   = this;
+    var t      = this.ctx.currentTime + 0.05;
+    var eighth = (60 / 155) / 2;
+
+    var melody = [
+      293.66, 0, 293.66, 0, 349.23, 0, 293.66, 0,
+      261.63, 0, 0,      0, 261.63, 0, 0,      0,
+      293.66, 0, 329.63, 0, 349.23, 0, 329.63, 0,
+      293.66, 0, 0,      0, 0,      0, 0,      0,
+      233.08, 0, 233.08, 0, 261.63, 0, 293.66, 0,
+      329.63, 0, 0,      0, 349.23, 0, 0,      0,
+      293.66, 0, 261.63, 0, 233.08, 0, 220,    0,
+      220,    0, 0,      0, 0,      0, 0,      0
+    ];
+    // Heavy, low bass
+    var bass = [
+      73.42, 0, 73.42, 0, 73.42, 0, 73.42, 0,
+      65.41, 0, 65.41, 0, 65.41, 0, 65.41, 0,
+      73.42, 0, 73.42, 0, 87.31, 0, 73.42, 0,
+      73.42, 0, 73.42, 0, 73.42, 0, 73.42, 0,
+      58.27, 0, 58.27, 0, 65.41, 0, 73.42, 0,
+      82.41, 0, 82.41, 0, 87.31, 0, 82.41, 0,
+      73.42, 0, 65.41, 0, 58.27, 0, 55,    0,
+      55,    0, 55,    0, 55,    0, 55,    0
+    ];
+
+    var totalDuration = melody.length * eighth;
+
+    for (var i = 0; i < melody.length; i++) {
+      if (melody[i] > 0) {
+        var o1 = this._playTone(melody[i], eighth * 0.8, 'square', t + i * eighth, 0.06);
+        if (o1) this.musicNodes.push(o1);
+      }
+    }
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o2 = this._playTone(bass[j], eighth * 0.75, 'sawtooth', t + j * eighth, 0.07);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+    // Heavy percussion on every beat and off-beat
+    for (var k = 0; k < melody.length; k += 2) {
+      this._playNoise(0.045, t + k * eighth, k % 4 === 0 ? 0.07 : 0.035);
+    }
+
+    setTimeout(function() {
+      self.musicNodes = [];
+      if (self.musicPlaying) self._playCastleMusicLoop();
     }, totalDuration * 1000);
   };
 
