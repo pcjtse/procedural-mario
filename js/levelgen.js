@@ -24,6 +24,9 @@ window.ProcMario = window.ProcMario || {};
 
   // Max jump distance (in tiles) Mario can clear with a running jump
   var MAX_JUMP_TILES = 5;
+  // Max jump height (in tiles) Mario can reach from the surface he is standing on.
+  // Derived from physics: v² / (2 * gravity) = 7.2² / (2 * 0.4) ≈ 64.8 px ≈ 4 tiles.
+  var MAX_JUMP_HEIGHT = 4;
   // Level height in tiles
   var LEVEL_HEIGHT = 15;
   // Ground row index (0-indexed from top; ground surface is row 13, fill below)
@@ -113,6 +116,7 @@ window.ProcMario = window.ProcMario || {};
 
     // ---- Validation pass ----
     this._validateGaps(grid, width);
+    this._validateObstacleHeights(grid, width);
 
     // ---- Theme post-processing ----
     if (this.theme === 'underground') {
@@ -624,6 +628,72 @@ window.ProcMario = window.ProcMario || {};
             }
           }
           inGap = false;
+        }
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Validation: ensure all obstacles are short enough to jump over
+  // ---------------------------------------------------------------
+
+  /**
+   * Scan every column for solid obstacles above ground level.
+   * The "effective floor" a player approaches from is the topmost solid
+   * surface in the immediately preceding column (or GROUND_Y if none).
+   * If the obstacle height relative to that floor exceeds MAX_JUMP_HEIGHT,
+   * a stepping platform is inserted 2–3 tiles to the left at half the
+   * obstacle height so the player can clear it in two jumps.
+   */
+  LevelGenerator.prototype._validateObstacleHeights = function (grid, width) {
+    for (var x = 1; x < width; x++) {
+      // Find the topmost solid tile strictly above the ground row in this column.
+      var obstacleTopY = -1;
+      for (var y = 0; y < GROUND_Y; y++) {
+        if (ProcMario.isSolid(grid[y][x])) {
+          obstacleTopY = y;
+          break;
+        }
+      }
+      if (obstacleTopY === -1) continue; // no above-ground obstacle here
+
+      // Determine the effective floor: the topmost solid surface in column x-1
+      // (the last tile column the player stands on before hitting this obstacle).
+      var effectiveFloorY = GROUND_Y;
+      for (var ly = 0; ly < GROUND_Y; ly++) {
+        if (ProcMario.isSolid(grid[ly][x - 1])) {
+          effectiveFloorY = ly;
+          break;
+        }
+      }
+
+      // Height of the obstacle relative to the accessible floor.
+      var relativeHeight = effectiveFloorY - obstacleTopY;
+      if (relativeHeight <= MAX_JUMP_HEIGHT) continue; // jumpable — nothing to do
+
+      // Obstacle is too tall. Place a stepping platform midway up so the player
+      // can reach it from the current floor and then clear the obstacle top.
+      var stepHeight = Math.ceil(relativeHeight / 2);
+      var stepY      = effectiveFloorY - stepHeight; // tile row for the platform
+
+      // Position: 2–3 tiles to the left of the obstacle column.
+      var stepStartX = Math.max(1, x - 3);
+      var stepEndX   = x - 1;
+
+      for (var sx = stepStartX; sx <= stepEndX; sx++) {
+        if (grid[stepY][sx] !== T.EMPTY) continue; // don't overwrite existing tiles
+
+        // Only place the platform where there is solid ground below it,
+        // so the player can actually reach this stepping stone (not a pit).
+        var hasSupport = false;
+        for (var fy = stepY + 1; fy <= GROUND_Y; fy++) {
+          if (ProcMario.isSolid(grid[fy][sx])) {
+            hasSupport = true;
+            break;
+          }
+        }
+        if (hasSupport) {
+          grid[stepY][sx] = T.HARD_BLOCK;
         }
       }
     }
