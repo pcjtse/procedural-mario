@@ -12,7 +12,7 @@ window.ProcMario = window.ProcMario || {};
     null,              // 0 = transparent
     '#000000',         // 1 = black
     '#FFFFFF',         // 2 = white
-    '#B81C04',         // 3 = red
+    '#E52521',         // 3 = red (NES-accurate bright red)
     '#FCA044',         // 4 = skin
     '#6B8CFF',         // 5 = sky blue
     '#00A800',         // 6 = green
@@ -495,38 +495,52 @@ window.ProcMario = window.ProcMario || {};
 
   var groundTopTile = (function() {
     var g = emptyGrid(16, 16);
-    // Green grass top (4 rows)
-    for (var r = 0; r < 4; r++) {
+    // Row 0: grass highlights (brighter green specks)
+    for (var c0 = 0; c0 < 16; c0++) g[0][c0] = 14;
+    g[0][2] = 6; g[0][3] = 6; g[0][6] = 6; g[0][7] = 6;
+    g[0][10] = 6; g[0][11] = 6; g[0][14] = 6; g[0][15] = 6;
+    // Rows 1-3: solid green grass
+    for (var r = 1; r < 4; r++) {
       for (var c = 0; c < 16; c++) g[r][c] = 6;
     }
-    g[0][0] = 14; g[0][5] = 14; g[0][10] = 14; g[0][15] = 14;
-    // Brown below
+    // Row 3 bottom edge: dark green separator
+    for (var c3 = 0; c3 < 16; c3++) g[3][c3] = 19;
+    // Rows 4-15: earth (orange-brown)
     for (var r2 = 4; r2 < 16; r2++) {
       for (var c2 = 0; c2 < 16; c2++) g[r2][c2] = 7;
     }
-    for (var c3 = 0; c3 < 16; c3++) { g[7][c3] = 10; g[11][c3] = 10; g[15][c3] = 10; }
-    g[4][7] = 10; g[5][7] = 10; g[6][7] = 10;
-    g[8][3] = 10; g[9][3] = 10; g[10][3] = 10;
-    g[8][11] = 10; g[9][11] = 10; g[10][11] = 10;
-    g[12][7] = 10; g[13][7] = 10; g[14][7] = 10;
+    // Subtle brick seams in earth
+    for (var c4 = 0; c4 < 16; c4++) { g[8][c4] = 10; g[12][c4] = 10; }
+    g[4][7] = 10; g[5][7] = 10; g[6][7] = 10; g[7][7] = 10;
+    g[9][3] = 10; g[10][3] = 10; g[11][3] = 10;
+    g[9][11] = 10; g[10][11] = 10; g[11][11] = 10;
+    g[13][7] = 10; g[14][7] = 10; g[15][7] = 10;
     return g;
   })();
 
   var brickTile = (function() {
     var g = emptyGrid(16, 16);
+    // Base brick color (warm orange-brown, classic NES)
     for (var r = 0; r < 16; r++) {
       for (var c = 0; c < 16; c++) g[r][c] = 9;
     }
-    // Dark mortar lines
-    for (var c2 = 0; c2 < 16; c2++) { g[3][c2] = 1; g[7][c2] = 1; g[11][c2] = 1; g[15][c2] = 1; }
-    g[0][7] = 1; g[1][7] = 1; g[2][7] = 1;
-    g[4][3] = 1; g[5][3] = 1; g[6][3] = 1;
-    g[4][11] = 1; g[5][11] = 1; g[6][11] = 1;
-    g[8][7] = 1; g[9][7] = 1; g[10][7] = 1;
-    g[12][3] = 1; g[13][3] = 1; g[14][3] = 1;
-    g[12][11] = 1; g[13][11] = 1; g[14][11] = 1;
-    // Highlights
-    g[0][0] = 15; g[4][0] = 15; g[8][0] = 15; g[12][0] = 15;
+    // Darker mortar lines (use dark brown instead of pure black for softer look)
+    for (var c2 = 0; c2 < 16; c2++) { g[3][c2] = 10; g[7][c2] = 10; g[11][c2] = 10; g[15][c2] = 10; }
+    g[0][7] = 10; g[1][7] = 10; g[2][7] = 10;
+    g[4][3] = 10; g[5][3] = 10; g[6][3] = 10;
+    g[4][11] = 10; g[5][11] = 10; g[6][11] = 10;
+    g[8][7] = 10; g[9][7] = 10; g[10][7] = 10;
+    g[12][3] = 10; g[13][3] = 10; g[14][3] = 10;
+    g[12][11] = 10; g[13][11] = 10; g[14][11] = 10;
+    // Top-left highlight on each brick cell
+    g[0][0] = 15; g[0][1] = 15;
+    g[4][0] = 15; g[4][1] = 15;
+    g[4][8] = 15; g[4][9] = 15;
+    g[8][0] = 15; g[8][1] = 15;
+    g[8][4] = 15; g[8][5] = 15;
+    g[8][12] = 15; g[8][13] = 15;
+    g[12][0] = 15; g[12][1] = 15;
+    g[12][8] = 15; g[12][9] = 15;
     return g;
   })();
 
@@ -566,13 +580,18 @@ window.ProcMario = window.ProcMario || {};
 
   var hardBlockTile = (function() {
     var g = emptyGrid(16, 16);
+    // Base: dark grey stone
     for (var r = 0; r < 16; r++) {
       for (var c = 0; c < 16; c++) g[r][c] = 18;
     }
-    // Lighter stone pattern
-    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 13; g[15][c2] = 1; }
-    for (var r2 = 0; r2 < 16; r2++) { g[r2][0] = 13; g[r2][15] = 1; }
-    g[1][1] = 21; g[1][2] = 21; g[2][1] = 21;
+    // Top & left: light highlight
+    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 13; g[1][c2] = 21; }
+    for (var r2 = 2; r2 < 16; r2++) { g[r2][0] = 13; g[r2][1] = 21; }
+    // Bottom & right: dark shadow
+    for (var c3 = 0; c3 < 16; c3++) { g[15][c3] = 1; }
+    for (var r3 = 0; r3 < 15; r3++) { g[r3][15] = 1; }
+    // Inner corner highlight
+    g[2][2] = 21; g[2][3] = 21; g[3][2] = 21;
     return g;
   })();
 
@@ -586,16 +605,22 @@ window.ProcMario = window.ProcMario || {};
     return g;
   })();
 
-  // Pipe tiles
+  // Pipe tiles — NES faithful green pipes with rim, highlight, and shadow
   var pipeTopLeft = (function() {
     var g = emptyGrid(16, 16);
+    // Fill with mid-green
     for (var r = 0; r < 16; r++) {
       for (var c = 0; c < 16; c++) g[r][c] = 6;
     }
-    for (var r2 = 0; r2 < 16; r2++) { g[r2][0] = 1; g[r2][1] = 14; }
-    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 1; g[15][c2] = 19; }
-    g[1][2] = 14; g[1][3] = 14; // highlight
-    for (var r3 = 1; r3 < 15; r3++) g[r3][3] = 14;
+    // Black rim outline (top and left)
+    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 1; g[1][c2] = 1; }
+    for (var r2 = 2; r2 < 16; r2++) { g[r2][0] = 1; g[r2][1] = 1; }
+    // Inner highlight stripe (left of center)
+    for (var r3 = 2; r3 < 16; r3++) { g[r3][2] = 14; g[r3][3] = 14; }
+    // Bottom edge darker
+    for (var c3 = 0; c3 < 16; c3++) g[15][c3] = 19;
+    // Right shadow on rim top section
+    g[0][14] = 19; g[0][15] = 19; g[1][14] = 19; g[1][15] = 19;
     return g;
   })();
 
@@ -604,27 +629,39 @@ window.ProcMario = window.ProcMario || {};
     for (var r = 0; r < 16; r++) {
       for (var c = 0; c < 16; c++) g[r][c] = 6;
     }
-    for (var r2 = 0; r2 < 16; r2++) { g[r2][15] = 1; g[r2][14] = 19; }
-    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 1; g[15][c2] = 19; }
-    for (var r3 = 1; r3 < 15; r3++) g[r3][12] = 19;
+    // Black rim outline (top and right)
+    for (var c2 = 0; c2 < 16; c2++) { g[0][c2] = 1; g[1][c2] = 1; }
+    for (var r2 = 2; r2 < 16; r2++) { g[r2][15] = 1; g[r2][14] = 1; }
+    // Shadow stripe (right of center)
+    for (var r3 = 2; r3 < 16; r3++) { g[r3][12] = 19; g[r3][13] = 19; }
+    // Bottom edge darker
+    for (var c3 = 0; c3 < 16; c3++) g[15][c3] = 19;
+    // Left highlight on rim
+    g[0][0] = 14; g[0][1] = 14; g[1][0] = 14; g[1][1] = 14;
     return g;
   })();
 
   var pipeBodyLeft = (function() {
     var g = emptyGrid(16, 16);
     for (var r = 0; r < 16; r++) {
-      for (var c = 2; c < 16; c++) g[r][c] = 6;
+      for (var c = 0; c < 16; c++) g[r][c] = 6;
     }
-    for (var r2 = 0; r2 < 16; r2++) { g[r2][2] = 1; g[r2][3] = 14; g[r2][5] = 14; }
+    // Left black border
+    for (var r2 = 0; r2 < 16; r2++) { g[r2][0] = 1; g[r2][1] = 1; }
+    // Inner highlight stripe
+    for (var r3 = 0; r3 < 16; r3++) { g[r3][2] = 14; g[r3][3] = 14; }
     return g;
   })();
 
   var pipeBodyRight = (function() {
     var g = emptyGrid(16, 16);
     for (var r = 0; r < 16; r++) {
-      for (var c = 0; c < 14; c++) g[r][c] = 6;
+      for (var c = 0; c < 16; c++) g[r][c] = 6;
     }
-    for (var r2 = 0; r2 < 16; r2++) { g[r2][13] = 1; g[r2][12] = 19; g[r2][10] = 19; }
+    // Right black border
+    for (var r2 = 0; r2 < 16; r2++) { g[r2][15] = 1; g[r2][14] = 1; }
+    // Shadow stripe
+    for (var r3 = 0; r3 < 16; r3++) { g[r3][12] = 19; g[r3][13] = 19; }
     return g;
   })();
 

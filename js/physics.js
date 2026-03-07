@@ -59,7 +59,7 @@
     if (!tilemap) return false;
     if (row < 0) return false;
     if (col < 0 || col >= tilemap.width) return false;
-    if (row >= tilemap.height) return true; // below map is solid (ground)
+    if (row >= tilemap.height) return false; // below map — allow falling through pits
     var tile = tilemap.data[row * tilemap.width + col];
     return tile > 0 && tilemap.solidTiles.indexOf(tile) !== -1;
   };

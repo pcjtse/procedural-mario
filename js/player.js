@@ -382,8 +382,11 @@
     this.state = 'dying';
     this.vx = 0;
     this.vy = 0;
-    // Disable collision by not running physics
     this.onGround = false;
+
+    // Always die as small Mario so the correct death sprite plays (NES style)
+    this.powerState = 'small';
+    this.h = 16;
 
     if (game) {
       game.lives--;
@@ -441,15 +444,15 @@
   // Transition rendering (growing/shrinking)
   Player.prototype._renderTransition = function(ctx, sx, sy, showBig) {
     if (showBig) {
-      // Draw at big size
       if (ProcMario.PixelArt && ProcMario.PixelArt.drawSprite) {
         var bigY = this._growing ? sy : sy - 16;
-        ProcMario.PixelArt.drawSprite(ctx, 'idle', 'big', sx, bigY, this.facing === -1, -1);
+        // When growing use the actual new power state (e.g. 'fire'), when shrinking show 'big'
+        var bigState = this._growing ? this.powerState : 'big';
+        ProcMario.PixelArt.drawSprite(ctx, 'idle', bigState, sx, bigY, this.facing === -1, -1);
       } else {
         this._renderFallbackBig(ctx, sx, this._growing ? sy : sy - 16);
       }
     } else {
-      // Draw at small size
       if (ProcMario.PixelArt && ProcMario.PixelArt.drawSprite) {
         var smallY = this._growing ? sy + 16 : sy;
         ProcMario.PixelArt.drawSprite(ctx, 'idle', 'small', sx, smallY, this.facing === -1, -1);
