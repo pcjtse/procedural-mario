@@ -23,6 +23,7 @@
   var renderer;
   var audio;
   var currentSeed = 1;
+  var levelNum = 1;   // tracks level count for difficulty scaling
   var difficulty = 0;
   var levelData = null;
   var stateTimer = 0;
@@ -169,8 +170,9 @@
         stateTimer++;
         if (stateTimer >= LEVEL_COMPLETE_DELAY) {
           levelAdvance = false;
-          currentSeed++;
-          difficulty = Math.min(1.0, currentSeed * 0.1);
+          currentSeed = ((currentSeed * 1664525 + 1013904223) >>> 0) % 99000 + 1000;
+          levelNum++;
+          difficulty = Math.min(1.0, 0.15 + levelNum * 0.1);
           startLevel(currentSeed);
         }
         renderer.frameCount++;
@@ -336,7 +338,7 @@
           coins: game.coins,
           lives: game.lives,
           time: game.time,
-          worldSeed: '' + currentSeed
+          worldSeed: '' + levelNum
         };
         renderer._renderHUD(hudState);
       }
@@ -511,8 +513,10 @@
 
   // ── Start new game ──
   function startNewGame() {
-    currentSeed = 1;
-    difficulty = 0;
+    // Randomize base seed so every playthrough generates different levels
+    currentSeed = Math.floor(Math.random() * 99000) + 1000;
+    levelNum = 1;
+    difficulty = 0.15;
     game.resetStats();
     startLevel(currentSeed);
   }

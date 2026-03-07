@@ -96,12 +96,14 @@ window.ProcMario = window.ProcMario || {};
 
   PopupCoin.prototype.render = function(ctx, camera) {
     var pos = camera.worldToScreen(this.x, this.y);
-    var widths = [8, 6, 2, 6];
-    var coinW = widths[this.animFrame];
-    var cx = pos.x + 4 - coinW / 2;
-
-    ctx.fillStyle = '#FFD700';
-    ctx.fillRect(cx, pos.y, coinW, 8);
+    var ss = ProcMario.spriteSheet;
+    if (ss) {
+      var spriteName = 'coin_frame' + (this.animFrame + 1);
+      ProcMario.drawSprite(ctx, ss, spriteName, pos.x, pos.y, false, 0.5);
+    } else {
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(pos.x, pos.y, 8, 8);
+    }
   };
 
   // ── Super Mushroom ──
