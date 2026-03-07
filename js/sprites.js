@@ -504,9 +504,19 @@
       sf
     );
 
-    // Big sprites have 4 empty rows at bottom; offset down so feet align with hitbox
-    var yOffset = isSmall ? 0 : 4;
-    ctx.drawImage(cached, Math.round(x), Math.round(y + yOffset));
+    if (isSmall) {
+      ctx.drawImage(cached, Math.round(x), Math.round(y));
+    } else {
+      // Big Mario is rendered at 2x scale (32x32 native pixels) so he looks
+      // genuinely bigger than small Mario in both width and height.
+      // The 16px-wide sprite is doubled horizontally; the 28 visible rows of
+      // the 32-row sprite map 1:1 to the 32-pixel dest height (last 4 rows are
+      // transparent padding). Shift left 8px to center the 32px sprite over the
+      // 16px hitbox, and down 4px so the feet align with the hitbox bottom.
+      var dx = Math.round(x) - 8;
+      var dy = Math.round(y) + 4;
+      ctx.drawImage(cached, dx, dy, 32, 32);
+    }
   };
 
   // Clear sprite cache (useful when palettes change)
@@ -519,7 +529,7 @@
     if (powerState === 'small') {
       return { w: 16, h: 16 };
     }
-    return { w: 16, h: 32 };
+    return { w: 32, h: 32 };
   };
 
   // ── Animation System ──
