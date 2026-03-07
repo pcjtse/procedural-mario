@@ -487,13 +487,11 @@
   // Draw a named sprite at screen position
   PixelArt.drawSprite = function(ctx, spriteName, powerState, x, y, flipX, starFrame) {
     var isSmall = (powerState === 'small');
-    var spriteSet = isSmall ? SMALL_SPRITES : BIG_SPRITES;
+    // Big Mario uses the same 16x16 sprite art as small Mario — just rendered
+    // at 2x scale — so the appearance is a clean pixel-art upscale with no
+    // repeated or stretched rows.
+    var data = SMALL_SPRITES[spriteName] || SMALL_SPRITES.idle;
     var paletteSet = PALETTE[powerState] || PALETTE.small;
-    var data = spriteSet[spriteName];
-
-    if (!data) {
-      data = spriteSet.idle; // fallback
-    }
 
     var sf = (starFrame !== undefined && starFrame >= 0) ? starFrame : -1;
     var cached = getCachedSprite(
@@ -504,9 +502,12 @@
       sf
     );
 
-    // Big sprites have 4 empty rows at bottom; offset down so feet align with hitbox
-    var yOffset = isSmall ? 0 : 4;
-    ctx.drawImage(cached, Math.round(x), Math.round(y + yOffset));
+    if (isSmall) {
+      ctx.drawImage(cached, Math.round(x), Math.round(y));
+    } else {
+      // Scale the 16x16 sprite to 32x32, centered over the 16px hitbox.
+      ctx.drawImage(cached, Math.round(x) - 8, Math.round(y), 32, 32);
+    }
   };
 
   // Clear sprite cache (useful when palettes change)
@@ -519,7 +520,7 @@
     if (powerState === 'small') {
       return { w: 16, h: 16 };
     }
-    return { w: 16, h: 32 };
+    return { w: 32, h: 32 };
   };
 
   // ── Animation System ──
