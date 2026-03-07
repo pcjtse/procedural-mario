@@ -228,7 +228,7 @@
     }
 
     // ── Fall Death ──
-    if (game.tilemap && this.y > game.tilemap.height * TILE_SIZE) {
+    if (game.tilemap && this.y + this.h > game.tilemap.height * TILE_SIZE) {
       this.die(game);
       return;
     }
@@ -409,7 +409,7 @@
     // Growing/shrinking animation - alternate between small and big
     if (this._growing || this._shrinking) {
       var timer = this._growing ? this._growTimer : this._shrinkTimer;
-      var showBig = Math.floor(timer / 4) % 2 === 0;
+      var showBig = Math.floor(timer / 8) % 2 === 0;
       this._renderTransition(ctx, sx, sy, showBig);
       return;
     }

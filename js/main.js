@@ -170,9 +170,9 @@
         stateTimer++;
         if (stateTimer >= LEVEL_COMPLETE_DELAY) {
           levelAdvance = false;
-          currentSeed++;
+          currentSeed = ((currentSeed * 1664525 + 1013904223) >>> 0) % 99000 + 1000;
           levelNum++;
-          difficulty = Math.min(1.0, levelNum * 0.1);
+          difficulty = Math.min(1.0, 0.15 + levelNum * 0.1);
           startLevel(currentSeed);
         }
         renderer.frameCount++;
@@ -516,7 +516,7 @@
     // Randomize base seed so every playthrough generates different levels
     currentSeed = Math.floor(Math.random() * 99000) + 1000;
     levelNum = 1;
-    difficulty = 0;
+    difficulty = 0.15;
     game.resetStats();
     startLevel(currentSeed);
   }

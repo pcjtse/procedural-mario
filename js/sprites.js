@@ -504,7 +504,9 @@
       sf
     );
 
-    ctx.drawImage(cached, Math.round(x), Math.round(y));
+    // Big sprites have 4 empty rows at bottom; offset down so feet align with hitbox
+    var yOffset = isSmall ? 0 : 4;
+    ctx.drawImage(cached, Math.round(x), Math.round(y + yOffset));
   };
 
   // Clear sprite cache (useful when palettes change)
