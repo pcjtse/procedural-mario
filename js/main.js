@@ -22,9 +22,10 @@
   var game;
   var renderer;
   var audio;
-  var currentSeed = 1;
-  var levelNum = 1;   // tracks level count for difficulty scaling
-  var difficulty = 0;
+  var currentSeed  = 1;
+  var levelNum     = 1;   // tracks level count for difficulty scaling
+  var difficulty   = 0;
+  var currentTheme = 'overworld'; // theme for the current level
   var levelData = null;
   var stateTimer = 0;
   var highScore = 0;
@@ -144,7 +145,7 @@
         if (introTimer <= 0) {
           levelIntro = false;
           game.setState(State.PLAYING);
-          audio.startMusic();
+          audio.startMusic(currentTheme);
         }
         renderer.frameCount++;
         return;
@@ -275,7 +276,7 @@
   function updatePaused() {
     if (game.input.isPressed('KeyP') || game.input.isPressed('Escape')) {
       game.setState(State.PLAYING);
-      audio.startMusic();
+      audio.startMusic(currentTheme);
     }
   }
 
@@ -320,14 +321,19 @@
 
       // Level intro overlay
       if (levelIntro) {
-        ctx.fillStyle = '#000000';
+        var introThemeProps = ProcMario.THEME_PROPS[game.theme || 'overworld'];
+        ctx.fillStyle = introThemeProps ? introThemeProps.introColor : '#000000';
         ctx.fillRect(0, 0, 256, 240);
-        renderer._drawText('WORLD ' + currentSeed, 88, 100, 1.5, '#FFFFFF');
+        renderer._drawText('WORLD ' + levelNum, 96, 88, 1.5, '#FFFFFF');
+        // Theme name (e.g. "UNDERGROUND")
+        if (introThemeProps && introThemeProps.name) {
+          renderer._drawText(introThemeProps.name, 128 - introThemeProps.name.length * 3, 108, 1, '#FCB404');
+        }
         // Small mario icon + lives
         if (ProcMario.PixelArt) {
-          ProcMario.PixelArt.drawSprite(ctx, 'idle', 'small', 100, 122, false, -1);
+          ProcMario.PixelArt.drawSprite(ctx, 'idle', 'small', 100, 128, false, -1);
         }
-        renderer._drawText('x ' + game.lives, 118, 128, 1, '#FFFFFF');
+        renderer._drawText('x ' + game.lives, 118, 134, 1, '#FFFFFF');
       }
 
       // HUD during gameplay
@@ -361,14 +367,15 @@
     game.render = function() {
       var ctx = game.ctx;
 
-      // Clear with sky
-      ctx.fillStyle = '#6b8cff';
+      // Clear with theme-appropriate sky colour
+      var themeProps = ProcMario.THEME_PROPS[game.theme || 'overworld'];
+      ctx.fillStyle = themeProps ? themeProps.skyColor : '#6b8cff';
       ctx.fillRect(0, 0, 256, 240);
 
       if (game.state === State.PLAYING || game.state === State.PAUSED ||
           game.state === State.LEVEL_COMPLETE) {
-        // Draw parallax backgrounds
-        renderer._renderBackgrounds(game.camera);
+        // Draw parallax backgrounds (theme-aware)
+        renderer._renderBackgrounds(game.camera, game.theme);
 
         // Draw tilemap
         game.renderTilemap(ctx);
@@ -410,7 +417,18 @@
       } else if (tileId === TileType.COIN) {
         spriteName = 'coin_frame' + (animFrame + 1);
       } else {
-        spriteName = ProcMario.TILE_SPRITE_MAP[tileId];
+        var baseName = ProcMario.TILE_SPRITE_MAP[tileId];
+        if (baseName) {
+          // Prefer a theme-specific sprite when available
+          var tProps = ProcMario.THEME_PROPS[game.theme || 'overworld'];
+          var prefix = tProps ? tProps.tilePrefix : '';
+          var themedName = prefix ? prefix + baseName : '';
+          if (themedName && renderer.spriteSheet.sprites[themedName]) {
+            spriteName = themedName;
+          } else {
+            spriteName = baseName;
+          }
+        }
       }
 
       if (spriteName) {
@@ -532,8 +550,12 @@
     levelAdvance = false;
     comboCount = 0;
 
-    // Generate level
-    var gen = new ProcMario.LevelGenerator(seed, difficulty);
+    // Determine and store theme for this level
+    currentTheme = ProcMario.getThemeForLevel(levelNum);
+    game.theme   = currentTheme;
+
+    // Generate level with theme
+    var gen = new ProcMario.LevelGenerator(seed, difficulty, currentTheme);
     levelData = gen.generate();
 
     // Adapt tilemap for engine/physics
@@ -543,8 +565,8 @@
     // Attach sprite-based tile renderer
     game.tilemap.renderTile = game._tileRenderFunc;
 
-    // Generate background decorations
-    renderer.generateBackground(levelData.width * TILE_SIZE);
+    // Generate background decorations (theme-specific)
+    renderer.generateBackground(levelData.width * TILE_SIZE, currentTheme);
     renderer.particles = [];
     renderer.popups = [];
     renderer.coinPops = [];

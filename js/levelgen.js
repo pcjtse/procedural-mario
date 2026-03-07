@@ -49,11 +49,13 @@ window.ProcMario = window.ProcMario || {};
   /**
    * @param {number} seed       - Integer seed for deterministic generation
    * @param {number} difficulty - 0.0 (easy) to 1.0 (hard)
+   * @param {string} theme      - 'overworld' | 'underground' | 'sky' | 'castle'
    */
-  function LevelGenerator(seed, difficulty) {
-    this.seed = seed !== undefined ? seed : Math.floor(Math.random() * 2147483647);
+  function LevelGenerator(seed, difficulty, theme) {
+    this.seed       = seed !== undefined ? seed : Math.floor(Math.random() * 2147483647);
     this.difficulty = Math.max(0, Math.min(1, difficulty || 0));
-    this.rand = mulberry32(this.seed);
+    this.theme      = theme || 'overworld';
+    this.rand       = mulberry32(this.seed);
   }
 
   // ---------------------------------------------------------------
@@ -112,6 +114,11 @@ window.ProcMario = window.ProcMario || {};
     // ---- Validation pass ----
     this._validateGaps(grid, width);
 
+    // ---- Theme post-processing ----
+    if (this.theme === 'underground') {
+      this._addCaveCeiling(grid, width);
+    }
+
     // ---- Build TileMap ----
     var tileMap = new ProcMario.TileMap(width, height);
     tileMap.loadFromArray(grid);
@@ -132,19 +139,62 @@ window.ProcMario = window.ProcMario || {};
 
   /**
    * Choose a segment type with weighted random selection.
-   * Weights shift with difficulty: harder = more gaps/challenges.
+   * Weights shift with difficulty and theme.
    */
   LevelGenerator.prototype._pickSegment = function () {
     var d = this.difficulty;
-    var weights = [
-      /* FLAT      */ 3 - d * 1.5,
-      /* GAP       */ 1 + d * 2,
-      /* PLATFORMS */ 2 + d * 1,
-      /* PIPES     */ 1.5,
-      /* STAIRS    */ 1 + d * 0.5,
-      /* COIN_RUN  */ 1.5 - d * 0.5,
-      /* CHALLENGE */ d * 2.5
-    ];
+    var weights;
+
+    switch (this.theme) {
+      case 'underground':
+        // Caves: lots of platforms and flat sections, very few open gaps,
+        // pipes act as cave pillars, more challenges as difficulty rises.
+        weights = [
+          /* FLAT      */ 3 - d * 0.5,
+          /* GAP       */ 0.2 + d * 0.4,
+          /* PLATFORMS */ 3   + d * 1,
+          /* PIPES     */ 2,
+          /* STAIRS    */ 1.5 + d * 0.5,
+          /* COIN_RUN  */ 1.5 - d * 0.3,
+          /* CHALLENGE */ d * 2
+        ];
+        break;
+      case 'sky':
+        // Sky world: many platforms and gaps, fewer pipes, coin-heavy.
+        weights = [
+          /* FLAT      */ 1.5 - d * 0.5,
+          /* GAP       */ 2   + d * 1.5,
+          /* PLATFORMS */ 3   + d * 1.5,
+          /* PIPES     */ 0.5,
+          /* STAIRS    */ 1   + d * 0.5,
+          /* COIN_RUN  */ 2   + d * 0.5,
+          /* CHALLENGE */ d * 2
+        ];
+        break;
+      case 'castle':
+        // Castle: dangerous gaps, long stairways, heavy on challenges,
+        // fewer coins, very few pipes.
+        weights = [
+          /* FLAT      */ 2   - d * 0.5,
+          /* GAP       */ 1   + d * 1.5,
+          /* PLATFORMS */ 1.5,
+          /* PIPES     */ 0.5,
+          /* STAIRS    */ 2   + d * 0.5,
+          /* COIN_RUN  */ 0.5,
+          /* CHALLENGE */ 2   + d * 3
+        ];
+        break;
+      default: // overworld
+        weights = [
+          /* FLAT      */ 3 - d * 1.5,
+          /* GAP       */ 1 + d * 2,
+          /* PLATFORMS */ 2 + d * 1,
+          /* PIPES     */ 1.5,
+          /* STAIRS    */ 1 + d * 0.5,
+          /* COIN_RUN  */ 1.5 - d * 0.5,
+          /* CHALLENGE */ d * 2.5
+        ];
+    }
 
     var total = 0;
     for (var i = 0; i < weights.length; i++) {
@@ -512,6 +562,27 @@ window.ProcMario = window.ProcMario || {};
       if (cx >= 0 && cx < grid[0].length && arcY >= 0 && arcY < LEVEL_HEIGHT) {
         if (grid[arcY][cx] === T.EMPTY) {
           grid[arcY][cx] = T.COIN;
+        }
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Underground cave ceiling
+  // ---------------------------------------------------------------
+
+  /**
+   * Scatter hard-block stalactites from the ceiling for underground levels.
+   * Only fills EMPTY cells to avoid overwriting gameplay-critical tiles.
+   */
+  LevelGenerator.prototype._addCaveCeiling = function (grid, width) {
+    for (var x = 0; x < width; x++) {
+      if (this.rand() < 0.12) {
+        var depth = this._randInt(1, 4);
+        for (var y = 0; y < depth && y < 7; y++) {
+          if (grid[y][x] === T.EMPTY) {
+            grid[y][x] = T.HARD_BLOCK;
+          }
         }
       }
     }
