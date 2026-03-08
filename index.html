@@ -7,6 +7,41 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- SVG color matrix filters for colorblind simulation modes -->
+  <svg id="colorblind-filters" xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden">
+    <defs>
+      <filter id="cb-protanopia">
+        <feColorMatrix type="matrix" values="
+          0.567 0.433 0     0 0
+          0.558 0.442 0     0 0
+          0     0.242 0.758 0 0
+          0     0     0     1 0"/>
+      </filter>
+      <filter id="cb-deuteranopia">
+        <feColorMatrix type="matrix" values="
+          0.625 0.375 0     0 0
+          0.7   0.3   0     0 0
+          0     0.3   0.7   0 0
+          0     0     0     1 0"/>
+      </filter>
+      <filter id="cb-tritanopia">
+        <feColorMatrix type="matrix" values="
+          0.95  0.05  0     0 0
+          0     0.433 0.567 0 0
+          0     0.475 0.525 0 0
+          0     0     0     1 0"/>
+      </filter>
+      <filter id="cb-highcontrast">
+        <feColorMatrix type="saturate" values="3"/>
+        <feComponentTransfer>
+          <feFuncR type="linear" slope="1.4" intercept="-0.2"/>
+          <feFuncG type="linear" slope="1.4" intercept="-0.2"/>
+          <feFuncB type="linear" slope="1.4" intercept="-0.2"/>
+        </feComponentTransfer>
+      </filter>
+    </defs>
+  </svg>
+
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
     <div id="scanlines"></div>
@@ -38,6 +73,12 @@
   <script src="js/items.js"></script>
   <script src="js/blocks.js"></script>
   <script src="js/objects.js"></script>
+
+  <!-- Touch controls (virtual D-pad / buttons for mobile) -->
+  <script src="js/touch.js"></script>
+
+  <!-- Replay system: record + playback player input streams -->
+  <script src="js/replay.js"></script>
 
   <!-- Main game orchestration (must be last) -->
   <script src="js/main.js"></script>

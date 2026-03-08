@@ -200,13 +200,25 @@ window.ProcMario = window.ProcMario || {};
         break;
 
       case 'mushroom':
-        // If player is already big, spawn fire flower instead
+        // If player is already big, spawn a random upgrade flower/cape
         if (player && player.powerState && player.powerState !== 'small') {
-          var flower = new ProcMario.Items.FireFlower(pixelX, pixelY);
-          game.addEntity(flower);
+          var upgradeRoll = Math.random();
+          if (upgradeRoll < 0.4) {
+            game.addEntity(new ProcMario.Items.FireFlower(pixelX, pixelY));
+          } else if (upgradeRoll < 0.6 && ProcMario.Items.IceFlower) {
+            game.addEntity(new ProcMario.Items.IceFlower(pixelX, pixelY));
+          } else if (upgradeRoll < 0.75 && ProcMario.Items.Cape) {
+            game.addEntity(new ProcMario.Items.Cape(pixelX, pixelY));
+          } else {
+            game.addEntity(new ProcMario.Items.FireFlower(pixelX, pixelY));
+          }
         } else {
-          var mushroom = new ProcMario.Items.Mushroom(pixelX, pixelY);
-          game.addEntity(mushroom);
+          // Small Mario: mushroom, or rare mini mushroom
+          if (Math.random() < 0.1 && ProcMario.Items.MiniMushroom) {
+            game.addEntity(new ProcMario.Items.MiniMushroom(pixelX, pixelY));
+          } else {
+            game.addEntity(new ProcMario.Items.Mushroom(pixelX, pixelY));
+          }
         }
         break;
 
@@ -218,6 +230,22 @@ window.ProcMario = window.ProcMario || {};
       case '1up':
         var oneUp = new ProcMario.Items.OneUpMushroom(pixelX, pixelY);
         game.addEntity(oneUp);
+        break;
+
+      case 'axe':
+        // Kill all Bowser entities and trigger level complete
+        var entities = game.entities;
+        for (var ai = 0; ai < entities.length; ai++) {
+          if (entities[ai].type === 'bowser' && !entities[ai].dead) {
+            entities[ai].dying = true;
+            entities[ai].dyingTimer = 0;
+            entities[ai].vy = -4;
+            game.score += 5000;
+            game.events.emit('enemyKilled', { enemy: entities[ai], style: 'axe' });
+          }
+        }
+        game.score += 2000;
+        setTimeout(function() { game.events.emit('levelComplete'); }, 1000);
         break;
     }
 

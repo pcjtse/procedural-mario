@@ -14,6 +14,8 @@ window.ProcMario = window.ProcMario || {};
     this.musicNodes = [];
     this.initialized = false;
     this.masterGain = null;
+    this.hurryUp = false; // true when timer < 100 → music speeds up
+    this.musicTheme = 'overworld';
   }
 
   /**
@@ -49,8 +51,9 @@ window.ProcMario = window.ProcMario || {};
 
   /**
    * Play a tone with given parameters
+   * @param {number} [pan] - optional stereo pan value in [-1, 1]
    */
-  AudioManager.prototype._playTone = function(freq, duration, type, startTime, gainVal) {
+  AudioManager.prototype._playTone = function(freq, duration, type, startTime, gainVal, pan) {
     if (!this.ctx || this.muted) return null;
     var t = startTime || this.ctx.currentTime;
     var osc = this.ctx.createOscillator();
@@ -60,10 +63,54 @@ window.ProcMario = window.ProcMario || {};
     gain.gain.setValueAtTime(gainVal || 0.15, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
     osc.connect(gain);
-    gain.connect(this.masterGain);
+
+    if (pan !== undefined && pan !== 0 && this.ctx.createStereoPanner) {
+      var panner = this.ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan));
+      gain.connect(panner);
+      panner.connect(this.masterGain);
+    } else {
+      gain.connect(this.masterGain);
+    }
+
     osc.start(t);
     osc.stop(t + duration);
     return osc;
+  };
+
+  /**
+   * Compute a pan value [-1, 1] for a world-x position relative to camera center.
+   * @param {number} worldX  - entity x in world pixels
+   * @param {number} camCenterX - camera center x in world pixels
+   */
+  AudioManager.prototype.getPan = function(worldX, camCenterX) {
+    var range = 128; // half-screen width in pixels
+    var offset = worldX - camCenterX;
+    return Math.max(-1, Math.min(1, offset / range));
+  };
+
+  /**
+   * Play a sound effect with stereo panning based on world position.
+   * @param {string} soundName - 'coin' | 'stomp' | 'bump' | 'break'
+   * @param {number} worldX
+   * @param {number} camCenterX
+   */
+  AudioManager.prototype.playSpatial = function(soundName, worldX, camCenterX) {
+    var pan = this.getPan(worldX, camCenterX);
+    var t = this.ctx ? this.ctx.currentTime : 0;
+    switch (soundName) {
+      case 'coin':
+        this._playTone(1318.5, 0.08, 'square', t, 0.12, pan);
+        this._playTone(1975.5, 0.15, 'square', t + 0.08, 0.12, pan);
+        break;
+      case 'stomp':
+        // noise is not panned (no pan param support for noise)
+        this.playStomp();
+        break;
+      case 'bump':
+        this._playTone(80, 0.05, 'square', t, 0.15, pan);
+        break;
+    }
   };
 
   /**
@@ -215,6 +262,40 @@ window.ProcMario = window.ProcMario || {};
     this._playSweep(500, 150, 0.3, 'square', null, 0.1);
   };
 
+  /**
+   * Duck background music for `durationSec` then restore.
+   * Used by jingle stings so they are clearly audible over the loop.
+   */
+  AudioManager.prototype._duckMusic = function(durationSec) {
+    if (!this.masterGain || this.muted) return;
+    var gain = this.masterGain.gain;
+    var now = this.ctx.currentTime;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(0.06, now);                     // duck to 20% of normal
+    gain.linearRampToValueAtTime(0.3, now + durationSec); // restore
+  };
+
+  /** 1-Up jingle: ascending arpeggio (already defined above, but now ducks music) */
+  AudioManager.prototype.play1UpJingle = function() {
+    if (!this.ctx) return;
+    this._duckMusic(0.6);
+    this.play1Up();
+  };
+
+  /** Power-up jingle: ascending scale, ducks music */
+  AudioManager.prototype.playPowerUpJingle = function() {
+    if (!this.ctx) return;
+    this._duckMusic(0.8);
+    this.playPowerUp();
+  };
+
+  /** Level-complete jingle: fanfare, ducks music */
+  AudioManager.prototype.playLevelCompleteJingle = function() {
+    if (!this.ctx) return;
+    // Note: stopMusic is called separately by levelComplete event handler
+    this.playFlagpole();
+  };
+
   // ===== BACKGROUND MUSIC =====
 
   /**
@@ -238,19 +319,112 @@ window.ProcMario = window.ProcMario || {};
   };
 
   AudioManager.prototype.stopMusic = function() {
-    this.musicPlaying = false;
-    this.musicTheme   = 'overworld';
+    this.musicPlaying  = false;
+    this.musicTheme    = 'overworld';
+    this.hurryUp       = false;
+    this._starActive   = false;
     for (var i = 0; i < this.musicNodes.length; i++) {
       try { this.musicNodes[i].stop(); } catch (e) { /* already stopped */ }
     }
     this.musicNodes = [];
   };
 
+  /**
+   * Switch to fast star music while star power is active.
+   * @param {string} resumeTheme - the theme to restore when star ends
+   */
+  AudioManager.prototype.startStarMusic = function(resumeTheme) {
+    if (!this.ctx) return;
+    this._starActive     = true;
+    this._starResumeTheme = resumeTheme || 'overworld';
+    // Stop current music, play star loop
+    var wasPlaying = this.musicPlaying;
+    this.musicPlaying = false;
+    for (var i = 0; i < this.musicNodes.length; i++) {
+      try { this.musicNodes[i].stop(); } catch (e) {}
+    }
+    this.musicNodes = [];
+    if (wasPlaying) {
+      this.musicPlaying = true;
+      this._playStarMusicLoop();
+    }
+  };
+
+  AudioManager.prototype.stopStarMusic = function() {
+    if (!this._starActive) return;
+    this._starActive = false;
+    // Stop star loop, resume original theme
+    this.musicPlaying = false;
+    for (var i = 0; i < this.musicNodes.length; i++) {
+      try { this.musicNodes[i].stop(); } catch (e) {}
+    }
+    this.musicNodes = [];
+    this.startMusic(this._starResumeTheme || 'overworld');
+  };
+
+  AudioManager.prototype._playStarMusicLoop = function() {
+    if (!this.ctx || !this.musicPlaying || !this._starActive) return;
+    var self   = this;
+    var t      = this.ctx.currentTime + 0.02;
+    var eighth = (60 / 220) / 2; // Very fast BPM
+
+    // Star melody: bright, fast, upbeat
+    var melody = [
+      659.25, 0, 783.99, 0, 987.77, 0, 1046.5, 0,
+      987.77, 0, 880,    0, 783.99, 0, 659.25, 0,
+      523.25, 0, 659.25, 0, 783.99, 0, 880,    0,
+      987.77, 0, 0,      0, 0,      0, 0,      0
+    ];
+    var bass = [
+      261.63, 0, 329.63, 0, 261.63, 0, 329.63, 0,
+      261.63, 0, 329.63, 0, 261.63, 0, 329.63, 0,
+      196.00, 0, 261.63, 0, 196.00, 0, 261.63, 0,
+      246.94, 0, 246.94, 0, 246.94, 0, 246.94, 0
+    ];
+
+    var totalDuration = melody.length * eighth;
+    for (var i = 0; i < melody.length; i++) {
+      if (melody[i] > 0) {
+        var o1 = this._playTone(melody[i], eighth * 0.7, 'square', t + i * eighth, 0.07);
+        if (o1) this.musicNodes.push(o1);
+      }
+    }
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o2 = this._playTone(bass[j], eighth * 0.6, 'triangle', t + j * eighth, 0.05);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+    for (var k = 0; k < melody.length; k += 2) {
+      this._playNoise(0.02, t + k * eighth, 0.04);
+    }
+
+    setTimeout(function() {
+      self.musicNodes = [];
+      if (self.musicPlaying && self._starActive) self._playStarMusicLoop();
+      else if (self.musicPlaying && !self._starActive) self._playMusicLoopForTheme();
+    }, totalDuration * 1000);
+  };
+
+  /**
+   * Enable/disable hurry-up mode (restarts the current music loop at 1.5× BPM).
+   */
+  AudioManager.prototype.setHurryUp = function(enabled) {
+    if (this.hurryUp === enabled) return;
+    this.hurryUp = enabled;
+    if (this.musicPlaying) {
+      // Restart the loop — the next iteration will pick up the new BPM multiplier
+      var theme = this.musicTheme;
+      this.stopMusic();
+      this.startMusic(theme);
+    }
+  };
+
   AudioManager.prototype._playMusicLoop = function() {
     if (!this.ctx || !this.musicPlaying) return;
     var self = this;
     var t = this.ctx.currentTime + 0.05;
-    var bpm = 140;
+    var bpm = this.hurryUp ? 210 : 140;
     var beat = 60 / bpm;
     var eighth = beat / 2;
 
@@ -319,7 +493,7 @@ window.ProcMario = window.ProcMario || {};
     if (!this.ctx || !this.musicPlaying) return;
     var self  = this;
     var t     = this.ctx.currentTime + 0.05;
-    var bpm   = 110;
+    var bpm   = this.hurryUp ? 165 : 110;
     var eighth = (60 / bpm) / 2;
 
     // Melody – A natural minor, dark descending phrases
@@ -378,7 +552,7 @@ window.ProcMario = window.ProcMario || {};
     if (!this.ctx || !this.musicPlaying) return;
     var self   = this;
     var t      = this.ctx.currentTime + 0.05;
-    var eighth = (60 / 150) / 2;
+    var eighth = (60 / (this.hurryUp ? 225 : 150)) / 2;
 
     var melody = [
       783.99, 0, 880, 0, 987.77, 0, 880, 0,
@@ -431,7 +605,7 @@ window.ProcMario = window.ProcMario || {};
     if (!this.ctx || !this.musicPlaying) return;
     var self   = this;
     var t      = this.ctx.currentTime + 0.05;
-    var eighth = (60 / 155) / 2;
+    var eighth = (60 / (this.hurryUp ? 232 : 155)) / 2;
 
     var melody = [
       293.66, 0, 293.66, 0, 349.23, 0, 293.66, 0,
@@ -478,6 +652,38 @@ window.ProcMario = window.ProcMario || {};
       self.musicNodes = [];
       if (self.musicPlaying) self._playCastleMusicLoop();
     }, totalDuration * 1000);
+  };
+
+  // ===== AMBIENT =====
+
+  /**
+   * Start a looping underground water-drip ambience.
+   * Schedules random soft drips over a recurring window.
+   */
+  AudioManager.prototype.startDripAmbience = function() {
+    if (!this.ctx || !this.musicPlaying) return;
+    var self = this;
+    this._dripLoop = true;
+    this._scheduleDrip();
+  };
+
+  AudioManager.prototype._scheduleDrip = function() {
+    if (!this._dripLoop || !this.musicPlaying || !this.ctx) return;
+    var self = this;
+    var delay = 800 + Math.random() * 2400; // 0.8 – 3.2 s
+    this._dripTimeout = setTimeout(function() {
+      if (!self._dripLoop || !self.musicPlaying) return;
+      // Drip: short sine ping at 900–1400 Hz
+      var freq = 900 + Math.random() * 500;
+      self._playTone(freq, 0.06, 'sine', null, 0.04);
+      self._playTone(freq * 0.5, 0.12, 'sine', null, 0.02); // echo
+      self._scheduleDrip();
+    }, delay);
+  };
+
+  AudioManager.prototype.stopDripAmbience = function() {
+    this._dripLoop = false;
+    if (this._dripTimeout) { clearTimeout(this._dripTimeout); this._dripTimeout = null; }
   };
 
   // ===== EXPORTS =====

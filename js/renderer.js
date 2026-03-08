@@ -24,7 +24,12 @@ window.ProcMario = window.ProcMario || {};
     10: 'pipe_body_right',
     11: 'coin',        // animated - handled specially
     12: 'flagpole',
-    13: 'flagpole_top'
+    13: 'flagpole_top',
+    14: 'lava',        // animated - handled inline
+    15: 'ice',         // handled inline
+    16: 'note_block',  // handled inline
+    17: 'water',       // animated - handled inline
+    18: 'vine'         // handled inline
   };
 
   /**
@@ -48,6 +53,7 @@ window.ProcMario = window.ProcMario || {};
     this.bgHills = [];
     this.bgBushes = [];
     this.bgStalactites = [];  // underground
+    this.daySkyColor = SKY_COLOR; // overworld sky tint (morning/afternoon/dusk)
   }
 
   /**
@@ -71,6 +77,10 @@ window.ProcMario = window.ProcMario || {};
     this.bgStalactites = [];
 
     if (theme === 'overworld') {
+      // Randomly pick morning / afternoon sky tint (no dusk/orange)
+      var dayVariants = ['#A8DAFF', '#6B8CFF', '#5BA3FF']; // morning, afternoon, clear blue
+      this.daySkyColor = dayVariants[Math.floor(Math.random() * dayVariants.length)];
+
       // Clouds every ~120 pixels
       for (var x = 60; x < levelWidth; x += 100 + Math.random() * 80) {
         this.bgClouds.push({ x: x, y: 20 + Math.random() * 40 });
@@ -109,7 +119,7 @@ window.ProcMario = window.ProcMario || {};
       }
 
     }
-    // castle background is drawn procedurally from cam.x, no pre-generation needed
+    // castle and ice backgrounds are drawn procedurally from cam.x, no pre-generation needed
   };
 
   /**
@@ -194,6 +204,8 @@ window.ProcMario = window.ProcMario || {};
       case 'underground': this._renderUndergroundBg(cam); break;
       case 'sky':         this._renderSkyBg(cam);         break;
       case 'castle':      this._renderCastleBg(cam);      break;
+      case 'ice':         this._renderIceBg(cam);         break;
+      case 'water':       this._renderWaterBg(cam);       break;
       default:            this._renderOverworldBg(cam);
     }
   };
@@ -274,10 +286,12 @@ window.ProcMario = window.ProcMario || {};
   Renderer.prototype._renderCastleBg = function(cam) {
     var ctx = this.ctx;
 
-    // Lava glow at the bottom of the screen
-    ctx.fillStyle = 'rgba(180,40,0,0.35)';
+    // Animated lava glow at the bottom — pulses in brightness
+    var glowPulse = 0.25 + 0.1 * Math.sin(this.frameCount * 0.08);
+    var glowPulse2 = 0.1 + 0.05 * Math.sin(this.frameCount * 0.06 + 1.2);
+    ctx.fillStyle = 'rgba(180,40,0,' + glowPulse.toFixed(2) + ')';
     ctx.fillRect(0, this.height - 40, this.width, 40);
-    ctx.fillStyle = 'rgba(255,80,0,0.15)';
+    ctx.fillStyle = 'rgba(255,80,0,' + glowPulse2.toFixed(2) + ')';
     ctx.fillRect(0, this.height - 72, this.width, 32);
 
     // Tiling castle battlement silhouette (mid-ground, 0.4x parallax)
@@ -289,6 +303,97 @@ window.ProcMario = window.ProcMario || {};
       ctx.fillRect(bx,      this.height - 106, 18, 16); // left merlon
       ctx.fillRect(bx + 30, this.height - 106, 18, 16); // right merlon
     }
+  };
+
+  // ── Ice world: snow-capped hills + drifting snowflakes ──
+  Renderer.prototype._renderIceBg = function(cam) {
+    var ctx = this.ctx;
+
+    // Snow-capped distant mountains (0.3x parallax)
+    ctx.fillStyle = '#DDEEFF';
+    var mOff = Math.floor(cam.x * 0.3) % 96;
+    for (var mx = -mOff - 48; mx < this.width + 96; mx += 96) {
+      var mbx = Math.round(mx);
+      // Triangle-ish mountain
+      ctx.beginPath();
+      ctx.moveTo(mbx, this.height - 40);
+      ctx.lineTo(mbx + 48, this.height - 120);
+      ctx.lineTo(mbx + 96, this.height - 40);
+      ctx.closePath();
+      ctx.fill();
+      // Snow cap
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.moveTo(mbx + 24, this.height - 75);
+      ctx.lineTo(mbx + 48, this.height - 120);
+      ctx.lineTo(mbx + 72, this.height - 75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#DDEEFF';
+    }
+
+    // Drifting snowflakes (near layer, 0.8x parallax, use frameCount for drift)
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (var si = 0; si < 20; si++) {
+      var base = si * 137; // pseudo-random spread
+      var sx = ((base * 31 + (this.frameCount * (0.3 + (si % 3) * 0.2) | 0) - Math.floor(cam.x * 0.8)) % (this.width + 16) + this.width + 16) % (this.width + 16) - 8;
+      var sy = ((base * 17 + this.frameCount * (0.5 + (si % 5) * 0.15) | 0) % this.height);
+      var sr = 1 + (si % 3);
+      ctx.fillRect(sx, sy, sr, sr);
+    }
+  };
+
+  // ── Water world: deep ocean gradient + bubbles + coral silhouettes ──
+  Renderer.prototype._renderWaterBg = function(cam) {
+    var ctx = this.ctx;
+    var W = this.width, H = this.height;
+
+    // Deep ocean gradient (dark blue at top, lighter near ground)
+    var grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#001830');
+    grad.addColorStop(1, '#004080');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Coral/reef silhouettes at bottom (0.4x parallax)
+    var cOff = Math.floor(cam.x * 0.4) % 128;
+    ctx.fillStyle = '#005040';
+    for (var cx = -cOff - 64; cx < W + 128; cx += 64) {
+      var cbx = Math.round(cx);
+      // Coral shape: tapered column with branches
+      ctx.fillRect(cbx + 28, H - 40, 8, 40);
+      ctx.fillRect(cbx + 16, H - 60, 8, 25);
+      ctx.fillRect(cbx + 40, H - 55, 8, 25);
+      ctx.fillRect(cbx + 10, H - 65, 12, 8);
+      ctx.fillRect(cbx + 44, H - 60, 10, 8);
+    }
+
+    // Rising bubbles (float upward using frameCount)
+    ctx.fillStyle = 'rgba(100,200,255,0.35)';
+    for (var bi = 0; bi < 18; bi++) {
+      var base = bi * 113;
+      var bx = ((base * 47 - Math.floor(cam.x * 0.6)) % (W + 16) + W + 16) % (W + 16) - 8;
+      var by = H - ((base * 23 + this.frameCount * (0.3 + (bi % 4) * 0.1) | 0) % (H + 8));
+      var br = 1 + (bi % 3);
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Light rays from surface (slow shimmer)
+    ctx.save();
+    ctx.globalAlpha = 0.06 + Math.sin(this.frameCount * 0.04) * 0.03;
+    ctx.fillStyle = '#80D0FF';
+    for (var ri = 0; ri < 5; ri++) {
+      var rx = ((ri * 97 + Math.floor(cam.x * 0.2)) % (W + 80) + W + 80) % (W + 80) - 40;
+      ctx.beginPath();
+      ctx.moveTo(rx, 0);
+      ctx.lineTo(rx + 30, H);
+      ctx.lineTo(rx - 10, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   };
 
   // ===== TILES =====
@@ -327,7 +432,37 @@ window.ProcMario = window.ProcMario || {};
           spriteName = TILE_SPRITE_MAP[tile];
         }
 
-        if (spriteName) {
+        if (tile === 14) {
+          // Lava: animated flickering orange-red
+          var lavaPhase = (Math.floor(this.frameCount / 8) + col) % 3;
+          var lavaColors = ['#FF4400', '#FF6600', '#FF2200'];
+          this.ctx.fillStyle = lavaColors[lavaPhase];
+          this.ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          // Bright highlight line at top
+          this.ctx.fillStyle = lavaPhase === 1 ? '#FFAA00' : '#FF8800';
+          this.ctx.fillRect(sx, sy, TILE_SIZE, 2);
+        } else if (tile === 15) {
+          // Ice: solid pale blue
+          this.ctx.fillStyle = '#A8DAFF';
+          this.ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          this.ctx.fillStyle = '#CCEDFF';
+          this.ctx.fillRect(sx, sy, TILE_SIZE, 3);
+          this.ctx.fillStyle = '#80C4F0';
+          this.ctx.fillRect(sx, sy + 3, TILE_SIZE, TILE_SIZE - 3);
+        } else if (tile === 16) {
+          // Note block: yellow with musical note look
+          this.ctx.fillStyle = '#E8C800';
+          this.ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          this.ctx.fillStyle = '#FFFFFF';
+          this.ctx.fillRect(sx + 1, sy + 1, TILE_SIZE - 2, 3);
+          this.ctx.fillRect(sx + 1, sy + TILE_SIZE - 4, TILE_SIZE - 2, 3);
+          // Note symbol (simplified)
+          this.ctx.fillStyle = '#8B6914';
+          this.ctx.fillRect(sx + 6, sy + 4, 2, 6);
+          this.ctx.fillRect(sx + 8, sy + 4, 2, 5);
+          this.ctx.fillRect(sx + 6, sy + 9, 4, 2);
+          this.ctx.fillRect(sx + 4, sy + 5, 3, 2);
+        } else if (spriteName) {
           ProcMario.drawSprite(this.ctx, this.spriteSheet, spriteName, sx, sy, false);
         }
       }
@@ -415,7 +550,7 @@ window.ProcMario = window.ProcMario || {};
   // ===== PARTICLES =====
 
   /**
-   * Spawn block break particles at a position
+   * Spawn block break particles (brick chunks + smoke puffs)
    */
   Renderer.prototype.spawnBlockBreak = function(worldX, worldY) {
     var offsets = [[-1,-1],[1,-1],[-1,0.5],[1,0.5]];
@@ -428,6 +563,54 @@ window.ProcMario = window.ProcMario || {};
         life: 30,
         color: '#E45C10',
         size: 4
+      });
+    }
+    // Smoke puffs
+    for (var s = 0; s < 3; s++) {
+      this.particles.push({
+        x: worldX + 4 + Math.random() * 8,
+        y: worldY + 4,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: -(1 + Math.random()),
+        life: 20,
+        color: '#AAAAAA',
+        size: 3
+      });
+    }
+  };
+
+  /**
+   * Spawn coin star burst (8 small yellow sparks)
+   */
+  Renderer.prototype.spawnCoinBurst = function(worldX, worldY) {
+    for (var i = 0; i < 8; i++) {
+      var angle = (i / 8) * Math.PI * 2;
+      var speed = 1.5 + Math.random();
+      this.particles.push({
+        x: worldX + 8,
+        y: worldY + 8,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 18,
+        color: '#FCB404',
+        size: 2
+      });
+    }
+  };
+
+  /**
+   * Spawn landing dust puff (small grey particles)
+   */
+  Renderer.prototype.spawnLandingDust = function(worldX, worldY) {
+    for (var i = 0; i < 4; i++) {
+      this.particles.push({
+        x: worldX + 4 + (i % 2) * 8,
+        y: worldY,
+        vx: (i < 2 ? -1 : 1) * (0.5 + Math.random()),
+        vy: -(0.5 + Math.random() * 0.5),
+        life: 12,
+        color: '#C8A464',
+        size: 2
       });
     }
   };
@@ -520,26 +703,44 @@ window.ProcMario = window.ProcMario || {};
   // ===== HUD =====
 
   Renderer.prototype._renderHUD = function(state) {
+    var ctx = this.ctx;
     var y = 8;
     var score = state.score || 0;
     var coins = state.coins || 0;
-    var world = state.worldSeed || '1-1';
+    var lives = state.lives !== undefined ? state.lives : 3;
+    var world = state.worldSeed || 'W1-1';
     var time = state.time || 400;
 
     // "MARIO" + score
     this._drawText('MARIO', 16, y, 1, '#FFFFFF');
     this._drawText(this._padNumber(score, 6), 16, y + 10, 1, '#FFFFFF');
 
-    // Coin count
-    this._drawText('x' + this._padNumber(coins, 2), 96, y + 10, 1, '#FCB404');
+    // Coin icon (5×5 yellow circle approximation) + count
+    var coinIconX = 82, coinIconY = y + 10;
+    ctx.fillStyle = '#FCB404';
+    ctx.fillRect(coinIconX + 1, coinIconY,     3, 1);
+    ctx.fillRect(coinIconX,     coinIconY + 1, 5, 3);
+    ctx.fillRect(coinIconX + 1, coinIconY + 4, 3, 1);
+    this._drawText('x' + this._padNumber(coins, 2), coinIconX + 7, y + 10, 1, '#FCB404');
 
-    // World
-    this._drawText('WORLD', 144, y, 1, '#FFFFFF');
-    this._drawText('' + world, 148, y + 10, 1, '#FFFFFF');
+    // World label + W1-1 style number
+    this._drawText('WORLD', 134, y, 1, '#FFFFFF');
+    this._drawText(world, 137, y + 10, 1, '#FFFFFF');
+
+    // Lives: heart icon + count
+    var hx = 188, hy = y + 10;
+    ctx.fillStyle = '#FF4444';
+    ctx.fillRect(hx + 1, hy,     2, 1);
+    ctx.fillRect(hx + 4, hy,     2, 1);
+    ctx.fillRect(hx,     hy + 1, 7, 2);
+    ctx.fillRect(hx + 1, hy + 3, 5, 1);
+    ctx.fillRect(hx + 2, hy + 4, 3, 1);
+    ctx.fillRect(hx + 3, hy + 5, 1, 1);
+    this._drawText('x' + lives, hx + 9, y + 10, 1, '#FFFFFF');
 
     // Time
-    this._drawText('TIME', 208, y, 1, '#FFFFFF');
-    this._drawText('' + Math.ceil(time), 212, y + 10, 1, '#FFFFFF');
+    this._drawText('TIME', 218, y, 1, '#FFFFFF');
+    this._drawText('' + Math.ceil(time), 220, y + 10, 1, '#FFFFFF');
   };
 
   // ===== SCREENS =====

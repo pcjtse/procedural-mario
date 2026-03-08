@@ -404,12 +404,27 @@ window.ProcMario = window.ProcMario || {};
       this.animFrame = (this.animFrame + 1) % 4;
     }
 
+    // Bowser fire: damages player instead of enemies
+    if (this.type === 'bowser_fire') {
+      var player = game.player;
+      if (player && !player.dead && !player.invincible && !player.starPower) {
+        if (Physics.checkEntityCollision(this, player)) {
+          this.dead = true;
+          player.damage(game);
+        }
+      }
+      return;
+    }
+
     // Check enemy collisions
     var entities = game.entities;
     for (var i = 0; i < entities.length; i++) {
       var ent = entities[i];
       if (ent.dead || ent.dying) continue;
-      if (ent.type !== 'goomba' && ent.type !== 'koopa' && ent.type !== 'piranha') continue;
+      if (ent.type !== 'goomba' && ent.type !== 'koopa' && ent.type !== 'piranha' &&
+          ent.type !== 'hammerbro' && ent.type !== 'cheep' && ent.type !== 'lakitu' &&
+          ent.type !== 'spiny') continue;
+      if (ent.fireproof) continue; // Buzzy Beetle is immune to fireballs
 
       if (Physics.checkEntityCollision(this, ent)) {
         // Kill enemy
@@ -442,6 +457,263 @@ window.ProcMario = window.ProcMario || {};
     ctx.fill();
   };
 
+  // ── IceBall (Ice Flower projectile) ──
+  function IceBall(x, y, direction) {
+    this.type = 'iceball';
+    this.x = x;
+    this.y = y;
+    this.w = 8;
+    this.h = 8;
+    this.vx = 4 * direction;
+    this.vy = 0;
+    this.onGround = false;
+    this.dead = false;
+    this.applyingForce = true;
+    this.startX = x;
+    this.animTimer = 0;
+    this.animFrame = 0;
+  }
+
+  IceBall.prototype.update = function(game) {
+    var prevVx = this.vx;
+    Physics.updateEntity(this, game.tilemap, 1);
+
+    // Bounce on ground
+    if (this.onGround) { this.vy = -3; }
+
+    // Destroyed on wall hit
+    if (prevVx !== 0 && this.vx === 0) { this.dead = true; return; }
+
+    // Max travel distance (~10 tiles)
+    if (Math.abs(this.x - this.startX) > TILE * 10) { this.dead = true; return; }
+
+    // Fall off screen
+    if (this.y > game.tilemap.height * TILE + 32) { this.dead = true; return; }
+
+    // Animation
+    this.animTimer++;
+    if (this.animTimer >= 4) { this.animTimer = 0; this.animFrame = (this.animFrame + 1) % 4; }
+
+    // Check enemy collisions — freeze enemies (not Spiny, not BuzzyBeetle)
+    var entities = game.entities;
+    for (var i = 0; i < entities.length; i++) {
+      var ent = entities[i];
+      if (ent.dead || ent.dying) continue;
+      if (ent.type === 'spiny') continue; // immune
+      if (!Physics.checkEntityCollision(this, ent)) continue;
+      if (ent.type === 'goomba' || ent.type === 'koopa' || ent.type === 'hammerbro' ||
+          ent.type === 'cheep' || ent.type === 'lakitu') {
+        // Freeze: stop and turn into an icy block for a few seconds
+        ent._frozen = true;
+        ent._frozenTimer = 0;
+        ent._frozenDuration = 180;
+        var savedVx = ent.vx;
+        ent.vx = 0;
+        game.score += 100;
+        game.events.emit('enemyFrozen', { enemy: ent });
+        this.dead = true;
+        return;
+      }
+    }
+  };
+
+  IceBall.prototype.render = function(ctx, camera) {
+    var pos = camera.worldToScreen(this.x, this.y);
+    var iceColors = ['#B0E8FF', '#80D0F0', '#50B8E0', '#90E0FF'];
+    ctx.fillStyle = iceColors[this.animFrame];
+    ctx.beginPath();
+    ctx.arc(pos.x + 4, pos.y + 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(pos.x + 3, pos.y + 3, 2, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  // ── Ice Flower ──
+  function IceFlower(x, y) {
+    this.type = 'iceflower';
+    this.x = x;
+    this.y = y;
+    this.w = 16;
+    this.h = 16;
+    this.vx = 0;
+    this.vy = 0;
+    this.onGround = false;
+    this.dead = false;
+    this.spawning = true;
+    this.spawnY = y;
+    this.targetY = y - 16;
+    this.animTimer = 0;
+    this.animFrame = 0;
+  }
+
+  IceFlower.prototype.update = function(game) {
+    if (this.spawning) {
+      this.y -= 0.5;
+      if (this.y <= this.targetY) { this.y = this.targetY; this.spawning = false; }
+      return;
+    }
+    this.animTimer++;
+    if (this.animTimer >= 12) { this.animTimer = 0; this.animFrame = (this.animFrame + 1) % 2; }
+    var player = game.player;
+    if (!player || player.dead) return;
+    if (Physics.checkEntityCollision(this, player)) {
+      this.dead = true;
+      game.score += 1000;
+      if (player.powerUp) player.powerUp('ice');
+      game.events.emit('itemCollected', { type: 'iceflower', x: this.x, y: this.y });
+    }
+  };
+
+  IceFlower.prototype.render = function(ctx, camera) {
+    var pos = camera.worldToScreen(this.x, this.y);
+    // Draw a simple ice flower with inline canvas
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    // Petals (light blue)
+    var petalColor = this.animFrame === 0 ? '#B0E8FF' : '#80D0F0';
+    ctx.fillStyle = petalColor;
+    ctx.fillRect(6, 0, 4, 4);   // top
+    ctx.fillRect(6, 12, 4, 4);  // bottom
+    ctx.fillRect(0, 6, 4, 4);   // left
+    ctx.fillRect(12, 6, 4, 4);  // right
+    // Center
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(5, 5, 6, 6);
+    // Stem
+    ctx.fillStyle = '#50A060';
+    ctx.fillRect(7, 13, 2, 3);
+    ctx.restore();
+  };
+
+  // ── Cape (grants flutter jump) ──
+  function Cape(x, y) {
+    this.type = 'cape';
+    this.x = x;
+    this.y = y;
+    this.w = 16;
+    this.h = 16;
+    this.vx = 0;
+    this.vy = 0;
+    this.onGround = false;
+    this.dead = false;
+    this.spawning = true;
+    this.spawnY = y;
+    this.targetY = y - 16;
+    this.animTimer = 0;
+    this.animFrame = 0;
+  }
+
+  Cape.prototype.update = function(game) {
+    if (this.spawning) {
+      this.y -= 0.5;
+      if (this.y <= this.targetY) { this.y = this.targetY; this.spawning = false; this.vx = 1.5; }
+      return;
+    }
+    var prevVx = this.vx;
+    Physics.updateEntity(this, game.tilemap, 1);
+    if (prevVx !== 0 && this.vx === 0) { this.vx = prevVx > 0 ? -1.5 : 1.5; }
+    if (this.y > game.tilemap.height * TILE + 32) { this.dead = true; return; }
+    this.animTimer++;
+    if (this.animTimer >= 10) { this.animTimer = 0; this.animFrame = (this.animFrame + 1) % 2; }
+    var player = game.player;
+    if (!player || player.dead) return;
+    if (Physics.checkEntityCollision(this, player)) {
+      this.dead = true;
+      game.score += 1000;
+      if (player.powerUp) player.powerUp('cape');
+      game.events.emit('itemCollected', { type: 'cape', x: this.x, y: this.y });
+    }
+  };
+
+  Cape.prototype.render = function(ctx, camera) {
+    var pos = camera.worldToScreen(this.x, this.y);
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    // Cape shape
+    var capeColor = this.animFrame === 0 ? '#C8A000' : '#E0B800';
+    ctx.fillStyle = capeColor;
+    ctx.fillRect(2, 0, 12, 2);   // collar
+    ctx.fillRect(0, 2, 2, 12);   // left edge
+    ctx.fillRect(14, 2, 2, 12);  // right edge
+    ctx.fillRect(2, 2, 12, 10);  // body
+    // Clasp
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(6, 0, 4, 3);
+    ctx.restore();
+  };
+
+  // ── Mini Mushroom ──
+  function MiniMushroom(x, y) {
+    this.type = 'mini_mushroom';
+    this.x = x;
+    this.y = y;
+    this.w = 16;
+    this.h = 16;
+    this.vx = 0;
+    this.vy = 0;
+    this.onGround = false;
+    this.dead = false;
+    this.applyingForce = true;
+    this.spawning = true;
+    this.spawnY = y;
+    this.targetY = y - 16;
+  }
+
+  MiniMushroom.prototype.update = function(game) {
+    if (this.spawning) {
+      this.y -= 0.5;
+      if (this.y <= this.targetY) { this.y = this.targetY; this.spawning = false; this.vx = 1.5; }
+      return;
+    }
+    var prevVx = this.vx;
+    Physics.updateEntity(this, game.tilemap, 1);
+    if (prevVx !== 0 && this.vx === 0) { this.vx = prevVx > 0 ? -1.5 : 1.5; }
+    if (this.y > game.tilemap.height * TILE + 32) { this.dead = true; return; }
+    var player = game.player;
+    if (!player || player.dead) return;
+    if (Physics.checkEntityCollision(this, player)) {
+      this.dead = true;
+      game.score += 1000;
+      if (player.powerUp) player.powerUp('mini');
+      game.events.emit('itemCollected', { type: 'mini_mushroom', x: this.x, y: this.y });
+    }
+  };
+
+  MiniMushroom.prototype.render = function(ctx, camera) {
+    var pos = camera.worldToScreen(this.x, this.y);
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    // Small mushroom (8x8 centered in 16x16)
+    ctx.fillStyle = '#4040E0'; // blue cap
+    ctx.fillRect(4, 2, 8, 6);
+    ctx.fillRect(3, 5, 10, 4);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(5, 3, 2, 2);
+    ctx.fillRect(9, 3, 2, 2);
+    // Stem
+    ctx.fillStyle = '#FFCC88';
+    ctx.fillRect(5, 8, 6, 5);
+    ctx.fillRect(4, 11, 8, 2);
+    ctx.restore();
+  };
+
+  // ── Factory: spawn iceball from player ──
+  Items.spawnIceBall = function(game) {
+    var existing = game.getEntitiesByType('iceball');
+    if (existing.length >= 2) return null;
+    var player = game.player;
+    if (!player) return null;
+    var dir = player.facing || 1;
+    var ix = dir > 0 ? player.x + player.w : player.x - 8;
+    var iy = player.y + player.h / 2 - 4;
+    var iceball = new IceBall(ix, iy, dir);
+    game.addEntity(iceball);
+    game.events.emit('iceballThrown', { x: ix, y: iy });
+    return iceball;
+  };
+
   // ── Factory: spawn fireball from player ──
   Items.spawnFireball = function(game) {
     // Max 2 on screen
@@ -469,6 +741,10 @@ window.ProcMario = window.ProcMario || {};
   Items.FireFlower = FireFlower;
   Items.Star = Star;
   Items.Fireball = Fireball;
+  Items.IceBall = IceBall;
+  Items.IceFlower = IceFlower;
+  Items.Cape = Cape;
+  Items.MiniMushroom = MiniMushroom;
 
   window.ProcMario.Items = Items;
 })();

@@ -104,6 +104,8 @@
     if (!tilemap) return;
     var ts = Physics.TILE_SIZE;
     entity.onGround = false;
+    entity._onIce = false;
+    entity._onLava = false;
 
     var tiles = Physics.getTilesInRange(entity.x, entity.y, entity.w, entity.h);
 
@@ -120,6 +122,19 @@
           entity.y = tileRect.y - entity.h;
           entity.vy = 0;
           entity.onGround = true;
+
+          // Detect tile type for special behaviour
+          var tileId = tilemap.data[t.row * tilemap.width + t.col];
+          if (ProcMario.TileType && tileId === ProcMario.TileType.ICE) {
+            entity._onIce = true;
+          } else if (ProcMario.TileType && tileId === ProcMario.TileType.LAVA) {
+            entity._onLava = true;
+          } else if (ProcMario.TileType && tileId === ProcMario.TileType.NOTE_BLOCK) {
+            // Note block: big bounce
+            entity.vy = -10;
+            entity.onGround = false;
+            entity._noteBlockBounce = true;
+          }
         } else if (entity.vy < 0) {
           // Hitting from below
           entity.y = tileRect.y + ts;
@@ -133,17 +148,45 @@
     }
   };
 
+  // Check if entity overlaps any water tiles
+  Physics.checkInWater = function(entity, tilemap) {
+    if (!tilemap || !ProcMario.TileType || !ProcMario.TileType.WATER) return false;
+    var WATER_ID = ProcMario.TileType.WATER;
+    var tiles = Physics.getTilesInRange(entity.x, entity.y, entity.w, entity.h);
+    for (var i = 0; i < tiles.length; i++) {
+      var tileId = tilemap.data[tiles[i].row * tilemap.width + tiles[i].col];
+      if (tileId === WATER_ID) return true;
+    }
+    return false;
+  };
+
   // Full physics step for an entity: gravity, move X, resolve X, move Y, resolve Y
   Physics.updateEntity = function(entity, tilemap, dt) {
     dt = dt || 1;
 
-    // Apply gravity
-    Physics.applyGravity(entity, dt);
+    // Water buoyancy: reduce gravity and cap fall speed
+    entity._inWater = Physics.checkInWater(entity, tilemap);
+    if (entity._inWater) {
+      if (!entity.onGround) {
+        entity.vy += Physics.GRAVITY * 0.2 * dt; // 20% gravity in water
+        var waterMaxFall = 1.5;
+        if (entity.vy > waterMaxFall) entity.vy = waterMaxFall;
+      }
+    } else {
+      // Apply normal gravity
+      Physics.applyGravity(entity, dt);
+    }
 
-    // Apply friction on ground
+    // Apply friction on ground (ice tile uses much lower friction)
     if (entity.onGround && !entity.applyingForce) {
-      entity.vx *= Physics.FRICTION;
-      if (Math.abs(entity.vx) < 0.1) entity.vx = 0;
+      var frictionVal = entity._onIce ? 0.99 : Physics.FRICTION;
+      entity.vx *= frictionVal;
+      if (!entity._onIce && Math.abs(entity.vx) < 0.1) entity.vx = 0;
+    }
+
+    // In water: apply water drag on X
+    if (entity._inWater) {
+      entity.vx *= 0.92;
     }
 
     // Move and resolve X

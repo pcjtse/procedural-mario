@@ -11,16 +11,18 @@ window.ProcMario = window.ProcMario || {};
     OVERWORLD:   'overworld',
     UNDERGROUND: 'underground',
     SKY:         'sky',
-    CASTLE:      'castle'
+    CASTLE:      'castle',
+    ICE:         'ice',
+    WATER:       'water'
   };
 
   /**
-   * Returns the theme name for a given level number (cycles through 4 themes).
+   * Returns the theme name for a given level number (cycles through 5 themes).
    * @param {number} levelNum
    * @returns {string}
    */
   function getThemeForLevel(levelNum) {
-    var cycle = ['overworld', 'underground', 'sky', 'castle'];
+    var cycle = ['overworld', 'underground', 'sky', 'castle', 'ice', 'water'];
     return cycle[(levelNum - 1) % cycle.length];
   }
 
@@ -65,6 +67,22 @@ window.ProcMario = window.ProcMario || {};
       bgType:     'castle',
       musicType:  'castle',
       tilePrefix: 'castle_'
+    },
+    ice: {
+      name:       'ICE WORLD',
+      skyColor:   '#C8E8FF',
+      introColor: '#001830',
+      bgType:     'ice',
+      musicType:  'sky',   // reuse sky music (light, airy feel)
+      tilePrefix: ''
+    },
+    water: {
+      name:       'WATER WORLD',
+      skyColor:   '#003060',
+      introColor: '#001828',
+      bgType:     'water',
+      musicType:  'underground',  // reuse underground music (subdued feel)
+      tilePrefix: ''
     }
   };
 

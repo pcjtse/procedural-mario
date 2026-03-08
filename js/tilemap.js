@@ -306,6 +306,98 @@ window.ProcMario = window.ProcMario || {};
     return results;
   };
 
+  // ──────────────────────────────────────────────────────────────────
+  // ChunkManager — streaming tile storage for very long levels.
+  //
+  // Divides the tile grid into vertical strips (chunks) of CHUNK_WIDTH
+  // columns.  Only chunks within ACTIVE_RADIUS of the camera column are
+  // kept in the live `tilemap.data` flat array; the rest are serialised
+  // to compact Uint8Array slabs and evicted from the hot array (filled
+  // with zeros).  The TileMap's existing API (getTile / setTile / data)
+  // continues to work unchanged; ChunkManager.update() is called once
+  // per frame with the current camera x in pixels.
+  // ──────────────────────────────────────────────────────────────────
+
+  var CHUNK_WIDTH   = 16;   // columns per chunk
+  var ACTIVE_RADIUS = 5;    // keep this many chunks on each side of camera
+
+  function ChunkManager(tilemap) {
+    this.tilemap      = tilemap;
+    this.chunkCount   = Math.ceil(tilemap.width / CHUNK_WIDTH);
+    this.height       = tilemap.height;
+    // Backing store: cold chunks serialised here (null = still hot/unsaved)
+    this._cold        = new Array(this.chunkCount);
+    this._activeRange = { min: 0, max: -1 }; // nothing evicted yet
+  }
+
+  ChunkManager.prototype._chunkForCol = function(col) {
+    return Math.floor(col / CHUNK_WIDTH);
+  };
+
+  ChunkManager.prototype._evict = function(chunkIdx) {
+    var tm  = this.tilemap;
+    var h   = this.height;
+    var cw  = CHUNK_WIDTH;
+    var startCol = chunkIdx * cw;
+    var endCol   = Math.min(startCol + cw, tm.width);
+    var cols     = endCol - startCol;
+    var slab     = new Uint8Array(cols * h);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < cols; x++) {
+        var hotIdx  = y * tm.width + (startCol + x);
+        slab[y * cols + x] = tm.data[hotIdx];
+        tm.data[hotIdx] = 0; // zero out hot array
+      }
+    }
+    this._cold[chunkIdx] = slab;
+  };
+
+  ChunkManager.prototype._load = function(chunkIdx) {
+    var slab = this._cold[chunkIdx];
+    if (!slab) return; // was never evicted (still live)
+    var tm       = this.tilemap;
+    var h        = this.height;
+    var cw       = CHUNK_WIDTH;
+    var startCol = chunkIdx * cw;
+    var endCol   = Math.min(startCol + cw, tm.width);
+    var cols     = endCol - startCol;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < cols; x++) {
+        tm.data[y * tm.width + (startCol + x)] = slab[y * cols + x];
+      }
+    }
+    this._cold[chunkIdx] = null; // mark as hot
+  };
+
+  /**
+   * Call once per frame.
+   * @param {number} camX - camera left edge in pixels
+   */
+  ChunkManager.prototype.update = function(camX) {
+    var centerChunk = this._chunkForCol(Math.floor(camX / TILE_SIZE));
+    var newMin = Math.max(0, centerChunk - ACTIVE_RADIUS);
+    var newMax = Math.min(this.chunkCount - 1, centerChunk + ACTIVE_RADIUS);
+    var old    = this._activeRange;
+
+    // Load newly-active chunks that weren't active before
+    for (var ci = newMin; ci <= newMax; ci++) {
+      if (ci < old.min || ci > old.max) {
+        this._load(ci);
+      }
+    }
+
+    // Evict chunks that just left the active window
+    for (var ei = old.min; ei <= old.max; ei++) {
+      if (ei < newMin || ei > newMax) {
+        this._evict(ei);
+      }
+    }
+
+    this._activeRange = { min: newMin, max: newMax };
+  };
+
+  ProcMario.ChunkManager = ChunkManager;
+
   // Expose
   TileMap.TILE_SIZE = TILE_SIZE;
   ProcMario.TileMap = TileMap;

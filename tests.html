@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Procedural Mario — Unit Tests</title>
+  <style>
+    body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 20px; }
+    h1   { color: #FCB404; margin-bottom: 4px; }
+    h2   { color: #aaa; font-size: 14px; font-weight: normal; margin-top: 0 0 20px; }
+    .suite { margin-bottom: 24px; }
+    .suite-name { color: #6B8CFF; font-size: 15px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 8px; }
+    .pass { color: #44FF88; }
+    .fail { color: #FF5544; }
+    .skip { color: #888; }
+    .result { padding: 3px 0; font-size: 13px; }
+    .summary { margin-top: 20px; padding: 12px; border-radius: 4px; font-size: 15px; font-weight: bold; }
+    .summary.ok   { background: #1a3a1a; color: #44FF88; border: 1px solid #44FF88; }
+    .summary.fail { background: #3a1a1a; color: #FF5544; border: 1px solid #FF5544; }
+    pre { font-size: 11px; color: #FF8855; background: #2a1a1a; padding: 8px; border-radius: 4px; margin: 4px 0 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Procedural Mario — Unit Tests</h1>
+  <h2>LevelGenerator.generate() validity suite</h2>
+
+  <div id="output"></div>
+
+  <!-- Dependencies (order matters) -->
+  <script>window.ProcMario = {};</script>
+  <script src="js/tiles.js"></script>
+  <script src="js/tilemap.js"></script>
+  <script src="js/levelgen.js"></script>
+
+  <script>
+  'use strict';
+
+  // ── Tiny test framework ──────────────────────────────────────────
+
+  var results = [];
+  var currentSuite = '';
+
+  function suite(name) {
+    currentSuite = name;
+  }
+
+  function test(name, fn) {
+    var errors = [];
+    try {
+      fn(function assert(cond, msg) {
+        if (!cond) errors.push(msg || 'assertion failed');
+      });
+    } catch (e) {
+      errors.push(e.message || String(e));
+    }
+    results.push({ suite: currentSuite, name: name, errors: errors });
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+
+  var T = ProcMario.TileType;
+  var GROUND_Y = 13;
+  var MAX_JUMP_TILES = 5;
+  var MAX_JUMP_HEIGHT = 4;
+
+  /** Count tiles matching a predicate across the whole grid */
+  function countTiles(grid, h, w, pred) {
+    var n = 0;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) if (pred(grid[y][x])) n++;
+    return n;
+  }
+
+  /** Find the widest gap (consecutive columns with no solid tile at or below GROUND_Y) */
+  function maxGapWidth(grid, h, w) {
+    var max = 0, cur = 0;
+    for (var x = 0; x < w; x++) {
+      var solid = false;
+      for (var y = GROUND_Y; y < h; y++) {
+        if (ProcMario.isSolid(grid[y][x])) { solid = true; break; }
+      }
+      if (!solid) { cur++; if (cur > max) max = cur; }
+      else cur = 0;
+    }
+    return max;
+  }
+
+  /** Check there is at least one column with solid tile at GROUND_Y (ground exists) */
+  function hasGround(grid, h, w) {
+    for (var x = 0; x < w; x++) {
+      if (ProcMario.isSolid(grid[GROUND_Y][x])) return true;
+    }
+    return false;
+  }
+
+  /** Themes and difficulties to test */
+  var THEMES = ['overworld', 'underground', 'sky', 'castle'];
+  var SEEDS_PER_CONFIG = 5; // test 5 different seeds per config
+
+  // ── Test suites ──────────────────────────────────────────────────
+
+  suite('API shape');
+
+  test('generate() returns required fields', function(assert) {
+    var gen = new ProcMario.LevelGenerator(42, 0, 'overworld');
+    var level = gen.generate();
+    assert(level.tiles  !== undefined, 'tiles field missing');
+    assert(level.tileMap !== undefined, 'tileMap field missing');
+    assert(level.entities !== undefined, 'entities field missing');
+    assert(typeof level.width  === 'number', 'width not a number');
+    assert(typeof level.height === 'number', 'height not a number');
+    assert(level.seed === 42, 'seed not preserved');
+  });
+
+  test('tiles is a 2D array matching width × height', function(assert) {
+    var gen = new ProcMario.LevelGenerator(7, 0.5, 'overworld');
+    var level = gen.generate();
+    assert(level.tiles.length === level.height, 'wrong row count');
+    for (var y = 0; y < level.height; y++) {
+      assert(level.tiles[y].length === level.width, 'row ' + y + ' wrong length');
+    }
+  });
+
+  test('entities is an array', function(assert) {
+    var gen = new ProcMario.LevelGenerator(13, 0.3, 'overworld');
+    var level = gen.generate();
+    assert(Array.isArray(level.entities), 'entities is not an array');
+  });
+
+  suite('Level dimensions');
+
+  test('width is between 200 and 400 tiles', function(assert) {
+    var seeds = [1, 2, 3, 100, 999999];
+    seeds.forEach(function(s) {
+      var level = new ProcMario.LevelGenerator(s, Math.random(), 'overworld').generate();
+      assert(level.width >= 200, 'width too small for seed ' + s + ': ' + level.width);
+      assert(level.width <= 400, 'width too large for seed ' + s + ': ' + level.width);
+    });
+  });
+
+  test('height is always 15', function(assert) {
+    [0, 0.5, 1].forEach(function(d) {
+      THEMES.forEach(function(theme) {
+        var level = new ProcMario.LevelGenerator(42, d, theme).generate();
+        assert(level.height === 15, 'height !== 15 for ' + theme + ' d=' + d);
+      });
+    });
+  });
+
+  suite('Determinism');
+
+  test('same seed always produces identical level', function(assert) {
+    var seed = 12345;
+    var a = new ProcMario.LevelGenerator(seed, 0.5, 'overworld').generate();
+    var b = new ProcMario.LevelGenerator(seed, 0.5, 'overworld').generate();
+    assert(a.width === b.width, 'width differs');
+    var match = true;
+    outer: for (var y = 0; y < a.height; y++) {
+      for (var x = 0; x < a.width; x++) {
+        if (a.tiles[y][x] !== b.tiles[y][x]) { match = false; break outer; }
+      }
+    }
+    assert(match, 'tiles differ for same seed');
+  });
+
+  test('different seeds produce different levels (usually)', function(assert) {
+    var a = new ProcMario.LevelGenerator(1, 0.5, 'overworld').generate();
+    var b = new ProcMario.LevelGenerator(2, 0.5, 'overworld').generate();
+    var same = true;
+    for (var x = 0; x < Math.min(a.width, b.width); x++) {
+      if (a.tiles[GROUND_Y][x] !== b.tiles[GROUND_Y][x]) { same = false; break; }
+    }
+    assert(!same, 'seed 1 and seed 2 are identical — PRNG may be broken');
+  });
+
+  suite('Flagpole');
+
+  THEMES.forEach(function(theme) {
+    test('flagpole present in ' + theme + ' levels', function(assert) {
+      for (var i = 0; i < SEEDS_PER_CONFIG; i++) {
+        var seed = (theme.charCodeAt(0) * 1000) + i;
+        var level = new ProcMario.LevelGenerator(seed, 0.5, theme).generate();
+        var poleCount = countTiles(level.tiles, level.height, level.width, function(t) {
+          return t === T.FLAGPOLE;
+        });
+        var poleTopCount = countTiles(level.tiles, level.height, level.width, function(t) {
+          return t === T.FLAGPOLE_TOP;
+        });
+        assert(poleCount > 0, theme + ' seed=' + seed + ' has no FLAGPOLE tile');
+        assert(poleTopCount > 0, theme + ' seed=' + seed + ' has no FLAGPOLE_TOP tile');
+      }
+    });
+  });
+
+  suite('No unbeatable gaps');
+
+  THEMES.forEach(function(theme) {
+    test('max gap ≤ ' + MAX_JUMP_TILES + ' tiles in ' + theme, function(assert) {
+      for (var i = 0; i < SEEDS_PER_CONFIG; i++) {
+        var seed = (theme.charCodeAt(0) * 777) + i + 1;
+        var level = new ProcMario.LevelGenerator(seed, 0.7, theme).generate();
+        var gap = maxGapWidth(level.tiles, level.height, level.width);
+        assert(gap <= MAX_JUMP_TILES,
+          theme + ' seed=' + seed + ': gap=' + gap + ' > MAX_JUMP_TILES=' + MAX_JUMP_TILES);
+      }
+    });
+  });
+
+  suite('Ground integrity');
+
+  THEMES.forEach(function(theme) {
+    test('ground row exists in ' + theme, function(assert) {
+      for (var i = 0; i < SEEDS_PER_CONFIG; i++) {
+        var seed = i * 37 + 1001;
+        var level = new ProcMario.LevelGenerator(seed, 0.4, theme).generate();
+        assert(hasGround(level.tiles, level.height, level.width),
+          theme + ' seed=' + seed + ': no ground tiles found at row ' + GROUND_Y);
+      }
+    });
+  });
+
+  suite('Safe start and end');
+
+  test('first 10 columns have solid ground (safe start)', function(assert) {
+    var seeds = [1, 2, 3, 42, 9999];
+    seeds.forEach(function(seed) {
+      var level = new ProcMario.LevelGenerator(seed, 0.8, 'overworld').generate();
+      for (var x = 0; x < 10; x++) {
+        var hasSolid = false;
+        for (var y = GROUND_Y; y < level.height; y++) {
+          if (ProcMario.isSolid(level.tiles[y][x])) { hasSolid = true; break; }
+        }
+        assert(hasSolid, 'seed=' + seed + ': gap in safe start zone at col ' + x);
+      }
+    });
+  });
+
+  test('flagpole is near the right edge (last 20% of level)', function(assert) {
+    var seeds = [5, 6, 7, 8, 9];
+    seeds.forEach(function(seed) {
+      var level = new ProcMario.LevelGenerator(seed, 0.5, 'overworld').generate();
+      var poleX = -1;
+      outer: for (var y = 0; y < level.height; y++) {
+        for (var x = 0; x < level.width; x++) {
+          if (level.tiles[y][x] === T.FLAGPOLE_TOP) { poleX = x; break outer; }
+        }
+      }
+      assert(poleX >= level.width * 0.7,
+        'seed=' + seed + ': flagpole at col ' + poleX + ' but level width=' + level.width);
+    });
+  });
+
+  suite('Enemy counts');
+
+  test('enemy count is bounded (≤ 1 per 5 tiles of width)', function(assert) {
+    THEMES.forEach(function(theme) {
+      for (var i = 0; i < 3; i++) {
+        var seed = i * 13 + 500;
+        var level = new ProcMario.LevelGenerator(seed, 0.9, theme).generate();
+        var enemies = level.entities.filter(function(e) {
+          return e.type === 'goomba' || e.type === 'koopa' || e.type === 'piranha';
+        });
+        var maxEnemies = Math.floor(level.width / 5);
+        assert(enemies.length <= maxEnemies,
+          theme + ' seed=' + seed + ': ' + enemies.length + ' enemies > max ' + maxEnemies);
+      }
+    });
+  });
+
+  test('no enemies in safe start zone (first 10 tiles)', function(assert) {
+    var seeds = [1, 2, 3, 4, 5];
+    seeds.forEach(function(seed) {
+      var level = new ProcMario.LevelGenerator(seed, 0.8, 'overworld').generate();
+      level.entities.forEach(function(e) {
+        if (e.type === 'goomba' || e.type === 'koopa' || e.type === 'piranha') {
+          assert(e.x >= 10, 'enemy at tile col ' + e.x + ' in safe start zone (seed=' + seed + ')');
+        }
+      });
+    });
+  });
+
+  suite('Tile validity');
+
+  test('no invalid tile IDs', function(assert) {
+    var validIds = Object.values
+      ? Object.values(T)
+      : Object.keys(T).map(function(k) { return T[k]; });
+    validIds = validIds.concat([0]); // 0 = EMPTY
+
+    var level = new ProcMario.LevelGenerator(42, 0.5, 'overworld').generate();
+    var invalid = [];
+    for (var y = 0; y < level.height; y++) {
+      for (var x = 0; x < level.width; x++) {
+        var tid = level.tiles[y][x];
+        if (validIds.indexOf(tid) === -1) invalid.push([x, y, tid]);
+      }
+    }
+    assert(invalid.length === 0,
+      'Invalid tile IDs found: ' + invalid.slice(0, 3).map(function(i) {
+        return '[' + i[0] + ',' + i[1] + ']=' + i[2];
+      }).join(', '));
+  });
+
+  test('TileMap data matches tiles grid', function(assert) {
+    var level = new ProcMario.LevelGenerator(99, 0.4, 'overworld').generate();
+    for (var y = 0; y < level.height; y++) {
+      for (var x = 0; x < level.width; x++) {
+        var fromGrid = level.tiles[y][x];
+        var fromMap  = level.tileMap.data[y * level.width + x];
+        assert(fromGrid === fromMap,
+          'Mismatch at [' + x + ',' + y + ']: grid=' + fromGrid + ' map=' + fromMap);
+        if (fromGrid !== fromMap) return; // stop on first fail
+      }
+    }
+  });
+
+  // ── Render results ───────────────────────────────────────────────
+
+  var out = document.getElementById('output');
+  var suites = {};
+  results.forEach(function(r) {
+    if (!suites[r.suite]) suites[r.suite] = [];
+    suites[r.suite].push(r);
+  });
+
+  var totalPass = 0, totalFail = 0;
+
+  Object.keys(suites).forEach(function(suiteName) {
+    var div = document.createElement('div');
+    div.className = 'suite';
+    div.innerHTML = '<div class="suite-name">' + suiteName + '</div>';
+
+    suites[suiteName].forEach(function(r) {
+      var passed = r.errors.length === 0;
+      if (passed) totalPass++; else totalFail++;
+      var icon = passed ? '✓' : '✗';
+      var cls  = passed ? 'pass' : 'fail';
+      var html = '<div class="result ' + cls + '">' + icon + ' ' + r.name + '</div>';
+      if (!passed) {
+        r.errors.forEach(function(e) {
+          html += '<pre>' + e.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>';
+        });
+      }
+      div.innerHTML += html;
+    });
+
+    out.appendChild(div);
+  });
+
+  var summary = document.createElement('div');
+  var ok = totalFail === 0;
+  summary.className = 'summary ' + (ok ? 'ok' : 'fail');
+  summary.textContent = (ok ? '✓ All ' : '✗ ') + totalPass + ' passed' +
+    (totalFail > 0 ? ', ' + totalFail + ' failed' : '');
+  out.appendChild(summary);
+  </script>
+</body>
+</html>

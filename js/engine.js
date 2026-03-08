@@ -23,6 +23,24 @@
     this.pressed = {};    // keys pressed this frame (edge-triggered)
     this._justPressed = {};
 
+    // Gamepad state (polled each frame via Web Gamepad API)
+    this._gp = {
+      left: false, right: false, up: false, down: false,
+      jump: false, run: false, start: false,
+      // previous-frame state for edge detection
+      _prevJump: false, _prevStart: false
+    };
+
+    // Touch state (updated by touch.js virtual D-pad / buttons)
+    this._touch = {
+      left: false, right: false, up: false, down: false,
+      jump: false, run: false, start: false,
+      _prevJump: false, _prevStart: false
+    };
+
+    // Replay override: when set, convenience methods return these values instead of live input
+    this._replayOverride = null;
+
     var self = this;
     document.addEventListener('keydown', function(e) {
       if (!self.keys[e.code]) {
@@ -30,7 +48,7 @@
       }
       self.keys[e.code] = true;
       // Prevent scrolling with game keys
-      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code) !== -1) {
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab','F3'].indexOf(e.code) !== -1) {
         e.preventDefault();
       }
     });
@@ -51,6 +69,57 @@
         this._justPressed[key] = false;
       }
     }
+
+    // Poll Web Gamepad API (standard mapping)
+    this._pollGamepad();
+
+    // Synthesise touch edge events
+    var tc = this._touch;
+    if (tc.jump  && !tc._prevJump)  { this.pressed['TouchJump']  = true; }
+    if (tc.start && !tc._prevStart) { this.pressed['TouchStart'] = true; }
+    tc._prevJump  = tc.jump;
+    tc._prevStart = tc.start;
+  };
+
+  InputManager.prototype._pollGamepad = function() {
+    var gp = this._gp;
+    var prevJump  = gp.jump;
+    var prevStart = gp.start;
+
+    // Reset current state
+    gp.left = gp.right = gp.up = gp.down = false;
+    gp.jump = gp.run = gp.start = false;
+
+    var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (var gi = 0; gi < gamepads.length; gi++) {
+      var pad = gamepads[gi];
+      if (!pad || !pad.connected) continue;
+
+      // D-pad (buttons 12-15) and left analogue stick (axes 0 & 1)
+      var axisX = pad.axes[0] || 0;
+      var axisY = pad.axes[1] || 0;
+      gp.left  = gp.left  || axisX < -0.5 || (pad.buttons[14] && pad.buttons[14].pressed);
+      gp.right = gp.right || axisX >  0.5 || (pad.buttons[15] && pad.buttons[15].pressed);
+      gp.up    = gp.up    || axisY < -0.5 || (pad.buttons[12] && pad.buttons[12].pressed);
+      gp.down  = gp.down  || axisY >  0.5 || (pad.buttons[13] && pad.buttons[13].pressed);
+
+      // A=0 (jump), B=1/X=2 (run), bumpers=4/5 (run), Start=9 (pause/confirm)
+      gp.jump  = gp.jump  || (pad.buttons[0] && pad.buttons[0].pressed);
+      gp.run   = gp.run   || (pad.buttons[1] && pad.buttons[1].pressed) ||
+                             (pad.buttons[2] && pad.buttons[2].pressed) ||
+                             (pad.buttons[4] && pad.buttons[4].pressed) ||
+                             (pad.buttons[5] && pad.buttons[5].pressed);
+      gp.start = gp.start || (pad.buttons[9] && pad.buttons[9].pressed);
+      break; // use first connected gamepad
+    }
+
+    // Synthesise edge-triggered press events into the pressed map
+    if (gp.jump  && !prevJump)  { this.pressed['GamepadJump']  = true; }
+    if (gp.start && !prevStart) { this.pressed['GamepadStart'] = true; }
+    if (gp.up    && !gp._prevUp)    { this.pressed['GamepadUp']   = true; }
+    if (gp.down  && !gp._prevDown)  { this.pressed['GamepadDown'] = true; }
+    gp._prevUp   = gp.up;
+    gp._prevDown = gp.down;
   };
 
   InputManager.prototype.isDown = function(code) {
@@ -61,27 +130,40 @@
     return !!this.pressed[code];
   };
 
-  // Convenience: check movement / action keys
+  // Convenience: check movement / action keys (keyboard + gamepad + touch)
   InputManager.prototype.left = function() {
-    return this.isDown('ArrowLeft') || this.isDown('KeyA');
+    if (this._replayOverride) return this._replayOverride.left;
+    return this.isDown('ArrowLeft') || this.isDown('KeyA') || this._gp.left || this._touch.left;
   };
   InputManager.prototype.right = function() {
-    return this.isDown('ArrowRight') || this.isDown('KeyD');
+    if (this._replayOverride) return this._replayOverride.right;
+    return this.isDown('ArrowRight') || this.isDown('KeyD') || this._gp.right || this._touch.right;
   };
   InputManager.prototype.up = function() {
-    return this.isDown('ArrowUp') || this.isDown('KeyW');
+    if (this._replayOverride) return this._replayOverride.up;
+    return this.isDown('ArrowUp') || this.isDown('KeyW') || this._gp.up || this._touch.up;
   };
   InputManager.prototype.down = function() {
-    return this.isDown('ArrowDown') || this.isDown('KeyS');
+    if (this._replayOverride) return this._replayOverride.down;
+    return this.isDown('ArrowDown') || this.isDown('KeyS') || this._gp.down || this._touch.down;
   };
   InputManager.prototype.jump = function() {
-    return this.isPressed('Space') || this.isPressed('KeyZ');
+    if (this._replayOverride) return this._replayOverride.jump;
+    return this.isPressed('Space') || this.isPressed('KeyZ') ||
+           this.isPressed('GamepadJump') || this.isPressed('TouchJump');
   };
   InputManager.prototype.jumpHeld = function() {
-    return this.isDown('Space') || this.isDown('KeyZ');
+    if (this._replayOverride) return this._replayOverride.jumpHeld;
+    return this.isDown('Space') || this.isDown('KeyZ') || this._gp.jump || this._touch.jump;
   };
   InputManager.prototype.run = function() {
-    return this.isDown('KeyX') || this.isDown('ShiftLeft');
+    if (this._replayOverride) return this._replayOverride.run;
+    return this.isDown('KeyX') || this.isDown('ShiftLeft') || this._gp.run || this._touch.run;
+  };
+  // Gamepad/Touch Start = Enter (for menus)
+  InputManager.prototype.isPressed = function(code) {
+    if (code === 'Enter' && (this.pressed['GamepadStart'] || this.pressed['TouchStart'])) return true;
+    return !!this.pressed[code];
   };
 
   // ── Event System ──
@@ -140,6 +222,7 @@
     this._accumulator = 0;
     this._running = false;
     this._rafId = null;
+    this.speedMultiplier = 1; // 0.5x, 1x, or 2x
 
     // Stats
     this.score = 0;
@@ -173,6 +256,9 @@
   Game.prototype._tick = function(timestamp) {
     var delta = timestamp - this._lastTime;
     this._lastTime = timestamp;
+
+    // Apply speed multiplier (0.5x slow, 2x fast)
+    delta *= (this.speedMultiplier || 1);
 
     // Cap delta to prevent spiral of death
     if (delta > 200) delta = 200;

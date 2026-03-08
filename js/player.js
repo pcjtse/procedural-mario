@@ -14,6 +14,9 @@
   var AIR_ACCEL_MULT = 0.65;
   var SKID_DECEL = 0.15;
 
+  var RUN_BOOST_MAX = 3.2;    // top speed after sustained run
+  var RUN_BOOST_FRAMES = 30; // frames of sustained running to unlock boost (~0.5s)
+
   var COYOTE_FRAMES = 6;
   var JUMP_BUFFER_FRAMES = 6;
   var INVINCIBLE_FRAMES = 120;
@@ -73,6 +76,13 @@
 
     // Rendering flash counter for invincibility
     this._flashCounter = 0;
+
+    // Run momentum boost timer
+    this._runHoldTimer = 0;
+
+    // Vine climbing state
+    this._climbing = false;
+    this._onVine   = false;
   }
 
   // ── Block Bump Callback ──
@@ -148,6 +158,16 @@
       var accel = inputRun ? RUN_ACCEL : WALK_ACCEL;
       var maxSpeed = inputRun ? RUN_MAX : WALK_MAX;
 
+      // Run boost: after holding run forward on ground for ~0.5s, unlock higher top speed
+      if (inputRun && this.onGround && dir === (this.vx > 0 ? 1 : this.vx < 0 ? -1 : dir)) {
+        this._runHoldTimer = Math.min(this._runHoldTimer + 1, RUN_BOOST_FRAMES);
+      } else {
+        this._runHoldTimer = Math.max(0, this._runHoldTimer - 2);
+      }
+      if (inputRun && this._runHoldTimer >= RUN_BOOST_FRAMES) {
+        maxSpeed = RUN_BOOST_MAX;
+      }
+
       // Reduced air control
       if (!this.onGround) {
         accel *= AIR_ACCEL_MULT;
@@ -179,6 +199,9 @@
       if (!isSkidding) {
         this.facing = dir;
       }
+    } else {
+      // Decay run hold timer when not pressing a direction
+      this._runHoldTimer = Math.max(0, this._runHoldTimer - 2);
     }
 
     // ── Jump Buffering ──
@@ -211,8 +234,90 @@
       this._jumpHeld = false;
     }
 
+    // ── Cape flutter jump ──
+    if (this.powerState === 'cape' && !this.onGround && !this._climbing) {
+      if (this.vy > 0 && inputJump && !this._capeFlutter) {
+        // Flutter: slow fall briefly
+        this._capeFlutter = true;
+        this.vy = -1.5;
+      } else if (!inputJumpHeld) {
+        this._capeFlutter = false;
+      }
+    } else {
+      this._capeFlutter = false;
+    }
+
+    // ── Mini mushroom — higher jump but smaller ──
+    if (this.powerState === 'mini' && this.jumpBufferTimer > 0 && canJump) {
+      this.vy = JUMP_FORCE * 1.2; // mini jumps higher
+    }
+
+    // ── Water swimming ── (when physics detected _inWater)
+    if (this._inWater) {
+      if (inputJump) {
+        this.vy = -2.5; // swim upward stroke
+        this.jumpBufferTimer = 0;
+      }
+    }
+
+    // ── Vine climbing ──
+    var CLIMB_SPEED = 1.5;
+    var skipNormalPhysics = false;
+    this._onVine = false;
+    if (game.tilemap && ProcMario.TileType && ProcMario.TileType.VINE) {
+      var VINE_ID = ProcMario.TileType.VINE;
+      var vtiles = Physics.getTilesInRange(this.x, this.y, this.w, this.h);
+      for (var vi = 0; vi < vtiles.length; vi++) {
+        var vc = vtiles[vi];
+        var vcTile = game.tilemap.data[vc.row * game.tilemap.width + vc.col];
+        if (vcTile === VINE_ID) { this._onVine = true; break; }
+      }
+    }
+
+    if (!this._onVine) {
+      this._climbing = false;
+    } else if (!this._climbing) {
+      // Auto-grab vine when pressing up/down while overlapping it
+      if (game.input.up() || game.input.down()) {
+        this._climbing = true;
+      }
+    }
+
+    if (this._climbing) {
+      // Suspend normal gravity; let player climb
+      this.vx = 0;
+      this.vy = 0;
+      var climbUp   = game.input.up();
+      var climbDown = game.input.down();
+      if (climbUp)   this.vy = -CLIMB_SPEED;
+      if (climbDown) this.vy =  CLIMB_SPEED;
+
+      if (inputJump) {
+        // Jump off the vine
+        this._climbing = false;
+        this.vy = JUMP_FORCE * 0.8;
+        this.vx = this.facing * RUN_MAX;
+        this.jumpBufferTimer = 0;
+      } else {
+        // Manual vertical movement without full physics
+        this.y += this.vy;
+        this.x += this.vx;
+        Physics.resolveX(this, game.tilemap);
+        Physics.resolveY(this, game.tilemap);
+        skipNormalPhysics = true;
+      }
+    }
+
     // ── Physics ──
-    Physics.updateEntity(this, game.tilemap, 1);
+    if (!skipNormalPhysics) {
+      Physics.updateEntity(this, game.tilemap, 1);
+    }
+
+    // ── Lava death ──
+    if (this._onLava && !this._dying && !this.starPower) {
+      this.die(game);
+      return;
+    }
 
     // ── Left Boundary ──
     if (this.x < 0) {
@@ -231,6 +336,13 @@
     if (game.tilemap && this.y + this.h > game.tilemap.height * TILE_SIZE) {
       this.die(game);
       return;
+    }
+
+    // ── Landing dust ──
+    if (this.onGround && !this._wasOnGround && Math.abs(this.vy) > 1) {
+      if (game.events) {
+        game.events.emit('playerLanded', { player: this, x: this.x, y: this.y + this.h });
+      }
     }
 
     // ── Update Animation State ──
@@ -276,6 +388,9 @@
         this.starPower = false;
         this.invincible = false;
         this.starColorFrame = 0;
+        if (this._game && this._game.events) {
+          this._game.events.emit('starPowerEnd', { player: this });
+        }
       }
     }
   };
@@ -333,6 +448,35 @@
       } else {
         this.powerState = 'fire';
       }
+    } else if (type === 'ice') {
+      if (this.powerState === 'small') {
+        this.powerState = 'ice';
+        this.h = 32;
+        this.y -= 16;
+        this._growing = true;
+        this._growTimer = 45;
+        this.state = 'growing';
+      } else {
+        this.powerState = 'ice';
+      }
+    } else if (type === 'cape') {
+      if (this.powerState === 'small') {
+        this.powerState = 'cape';
+        this.h = 32;
+        this.y -= 16;
+        this._growing = true;
+        this._growTimer = 45;
+        this.state = 'growing';
+      } else {
+        this.powerState = 'cape';
+      }
+      this._capeFlutter = false;
+    } else if (type === 'mini') {
+      // Mini shrinks Mario regardless of current state
+      this.powerState = 'mini';
+      this.w = 10;
+      this.h = 10;
+      this.y += 6; // shift down since hitbox shrinks
     } else if (type === 'star') {
       this.starPower = true;
       this.invincible = true;
@@ -350,7 +494,8 @@
     game = game || this._game;
     if (this.invincible || this.starPower) return;
 
-    if (this.powerState === 'big' || this.powerState === 'fire') {
+    if (this.powerState === 'big' || this.powerState === 'fire' ||
+        this.powerState === 'ice' || this.powerState === 'cape') {
       // Shrink to small
       this.powerState = 'small';
       this.y += 16; // Shrink downward
@@ -470,8 +615,12 @@
     // Face (skin)
     ctx.fillStyle = '#FBB882';
     ctx.fillRect(sx + 2, sy + 5, 12, 4);
-    // Body (blue/red for fire)
-    ctx.fillStyle = this.powerState === 'fire' ? '#E52521' : '#2038EC';
+    // Body (color varies by power state)
+    var bodyColor = this.powerState === 'fire' ? '#E52521' :
+                    this.powerState === 'ice'  ? '#B0E8FF' :
+                    this.powerState === 'cape' ? '#C8A000' :
+                    this.powerState === 'mini' ? '#9090FF' : '#2038EC';
+    ctx.fillStyle = bodyColor;
     ctx.fillRect(sx + 1, sy + 9, 14, 4);
     // Feet (brown)
     ctx.fillStyle = '#6B3304';
@@ -488,7 +637,10 @@
     ctx.fillStyle = '#FBB882';
     ctx.fillRect(sx + 2, sy + 5, 12, 5);
     // Body
-    ctx.fillStyle = this.powerState === 'fire' ? '#E52521' : '#2038EC';
+    var bigBodyColor = this.powerState === 'fire' ? '#E52521' :
+                       this.powerState === 'ice'  ? '#B0E8FF' :
+                       this.powerState === 'cape' ? '#C8A000' : '#2038EC';
+    ctx.fillStyle = bigBodyColor;
     ctx.fillRect(sx + 1, sy + 10, 14, 14);
     // Feet
     ctx.fillStyle = '#6B3304';
@@ -529,6 +681,7 @@
     this.coyoteTimer = 0;
     this.jumpBufferTimer = 0;
     this._flashCounter = 0;
+    this._runHoldTimer = 0;
     if (ProcMario.Animation) {
       this.anim = ProcMario.Animation.create();
     }
