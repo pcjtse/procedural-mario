@@ -15,10 +15,10 @@ window.ProcMario = window.ProcMario || {};
   // ── Shared helper: check stomp vs damage against player ──
   function checkPlayerCollision(enemy, game) {
     var player = game.player;
-    if (!player || player.dead || enemy.dead || enemy.dying) return;
-    if (player.invincible) return;
+    if (!player || player.dead || enemy.dead || enemy.dying) return null;
+    if (player.invincible) return null;
 
-    if (!Physics.checkEntityCollision(enemy, player)) return;
+    if (!Physics.checkEntityCollision(enemy, player)) return null;
 
     // Star power kills enemy instantly
     if (player.starPower) {
@@ -992,7 +992,7 @@ window.ProcMario = window.ProcMario || {};
       game.player.vy = -5;
       game.events.emit('enemyKilled', { enemy: this, style: 'stomp' });
     } else if (result === 'damage') {
-      game.player.damage(game);
+      game.player.takeDamage(game);
     }
   };
 
@@ -1085,9 +1085,9 @@ window.ProcMario = window.ProcMario || {};
     var result = checkPlayerCollision(this, game);
     if (result === 'stomp') {
       // Immune to stomping — damages player instead
-      game.player.damage(game);
+      game.player.takeDamage(game);
     } else if (result === 'damage') {
-      game.player.damage(game);
+      game.player.takeDamage(game);
     }
   };
 
@@ -1192,7 +1192,7 @@ window.ProcMario = window.ProcMario || {};
       game.player.vy = -5;
       game.events.emit('enemyKilled', { enemy: this, style: 'stomp' });
     } else if (result === 'damage') {
-      game.player.damage(game);
+      game.player.takeDamage(game);
     }
   };
 
@@ -1325,7 +1325,7 @@ window.ProcMario = window.ProcMario || {};
     // Contact damage — immune to stomping
     var result = checkPlayerCollision(this, game);
     if (result === 'stomp' || result === 'damage') {
-      game.player.damage(game);
+      game.player.takeDamage(game);
     }
   };
 

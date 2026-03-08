@@ -410,7 +410,7 @@ window.ProcMario = window.ProcMario || {};
       if (player && !player.dead && !player.invincible && !player.starPower) {
         if (Physics.checkEntityCollision(this, player)) {
           this.dead = true;
-          player.damage(game);
+          player.takeDamage(game);
         }
       }
       return;

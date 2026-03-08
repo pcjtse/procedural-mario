@@ -314,6 +314,7 @@ window.ProcMario = window.ProcMario || {};
       case 'underground': this._playUndergroundMusicLoop(); break;
       case 'sky':         this._playSkyMusicLoop();         break;
       case 'castle':      this._playCastleMusicLoop();      break;
+      case 'water':       this._playWaterMusicLoop();       break;
       default:            this._playMusicLoop();
     }
   };
@@ -651,6 +652,67 @@ window.ProcMario = window.ProcMario || {};
     setTimeout(function() {
       self.musicNodes = [];
       if (self.musicPlaying) self._playCastleMusicLoop();
+    }, totalDuration * 1000);
+  };
+
+  // ── Water: D-minor, slow flowing arpeggio, sine-heavy ──
+  AudioManager.prototype._playWaterMusicLoop = function() {
+    if (!this.ctx || !this.musicPlaying) return;
+    var self   = this;
+    var t      = this.ctx.currentTime + 0.05;
+    var bpm    = this.hurryUp ? 160 : 105;
+    var eighth = (60 / bpm) / 2;
+
+    // Slow, flowing melody — D natural minor, legato feel
+    var melody = [
+      293.66, 0, 0, 329.63, 0, 349.23, 0, 0,
+      392.00, 0, 0, 0,      0, 349.23, 0, 0,
+      329.63, 0, 0, 293.66, 0, 0,      0, 261.63,
+      0,      0, 0, 0,      0, 0,      0, 0,
+      220,    0, 0, 261.63, 0, 293.66, 0, 0,
+      329.63, 0, 0, 0,      0, 293.66, 0, 0,
+      261.63, 0, 0, 220,    0, 0,      0, 196,
+      0,      0, 0, 0,      0, 0,      0, 0
+    ];
+    // Gentle ripple arpeggio in bass (D-minor triad, sparse)
+    var bass = [
+      146.83, 0, 174.61, 0, 146.83, 0, 174.61, 0,
+      130.81, 0, 164.81, 0, 130.81, 0, 164.81, 0,
+      130.81, 0, 164.81, 0, 196,    0, 164.81, 0,
+      146.83, 0, 146.83, 0, 146.83, 0, 146.83, 0,
+      110,    0, 130.81, 0, 110,    0, 130.81, 0,
+      98,     0, 110,    0, 98,     0, 110,    0,
+      87.31,  0, 98,     0, 110,    0, 98,     0,
+      87.31,  0, 87.31,  0, 87.31,  0, 87.31,  0
+    ];
+
+    var totalDuration = melody.length * eighth;
+
+    // Melody: sine for a soft, underwater timbre
+    for (var i = 0; i < melody.length; i++) {
+      if (melody[i] > 0) {
+        var o1 = this._playTone(melody[i], eighth * 1.6, 'sine', t + i * eighth, 0.055);
+        if (o1) this.musicNodes.push(o1);
+        // Soft shimmer: faint octave-up overlay
+        var o2 = this._playTone(melody[i] * 2, eighth * 1.0, 'sine', t + i * eighth, 0.018);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+    // Bass: sine, long notes for a resonant deep-water feel
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o3 = this._playTone(bass[j], eighth * 1.8, 'sine', t + j * eighth, 0.06);
+        if (o3) this.musicNodes.push(o3);
+      }
+    }
+    // Very soft, infrequent percussion (bubbles)
+    for (var k = 0; k < melody.length; k += 8) {
+      this._playNoise(0.015, t + k * eighth, 0.03);
+    }
+
+    setTimeout(function() {
+      self.musicNodes = [];
+      if (self.musicPlaying) self._playWaterMusicLoop();
     }, totalDuration * 1000);
   };
 

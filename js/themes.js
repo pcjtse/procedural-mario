@@ -81,7 +81,7 @@ window.ProcMario = window.ProcMario || {};
       skyColor:   '#003060',
       introColor: '#001828',
       bgType:     'water',
-      musicType:  'underground',  // reuse underground music (subdued feel)
+      musicType:  'water',
       tilePrefix: ''
     }
   };

@@ -126,10 +126,6 @@
     return !!this.keys[code];
   };
 
-  InputManager.prototype.isPressed = function(code) {
-    return !!this.pressed[code];
-  };
-
   // Convenience: check movement / action keys (keyboard + gamepad + touch)
   InputManager.prototype.left = function() {
     if (this._replayOverride) return this._replayOverride.left;

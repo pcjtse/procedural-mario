@@ -150,7 +150,7 @@
 
   // Check if entity overlaps any water tiles
   Physics.checkInWater = function(entity, tilemap) {
-    if (!tilemap || !ProcMario.TileType || !ProcMario.TileType.WATER) return false;
+    if (!tilemap || !tilemap.data || !ProcMario.TileType || !ProcMario.TileType.WATER) return false;
     var WATER_ID = ProcMario.TileType.WATER;
     var tiles = Physics.getTilesInRange(entity.x, entity.y, entity.w, entity.h);
     for (var i = 0; i < tiles.length; i++) {

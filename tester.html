@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Procedural Mario — Test Suite</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; margin: 0; padding: 16px; }
+    h1   { color: #ffd700; margin: 0 0 8px; }
+    h2   { color: #aaa; font-size: 14px; margin: 4px 0 16px; font-weight: normal; }
+    #summary { font-size: 18px; margin: 12px 0; }
+    .pass { color: #4caf50; }
+    .fail { color: #f44336; }
+    .warn { color: #ff9800; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; font-size: 13px; }
+    th    { text-align: left; padding: 6px 10px; background: #333; color: #ccc; }
+    td    { padding: 5px 10px; border-bottom: 1px solid #2a2a2a; vertical-align: top; }
+    tr.pass-row td:first-child::before { content: "✓ "; color: #4caf50; }
+    tr.fail-row td:first-child::before { content: "✗ "; color: #f44336; }
+    tr.fail-row { background: #2a1010; }
+    .detail { color: #aaa; font-size: 11px; margin-top: 2px; }
+    #log { margin-top: 24px; max-width: 900px; background: #111; padding: 12px;
+           border-radius: 4px; font-size: 11px; color: #888;
+           max-height: 200px; overflow-y: auto; }
+    #log .err { color: #f44336; }
+  </style>
+</head>
+<body>
+<h1>Procedural Mario — Test Suite</h1>
+<h2 id="ts"></h2>
+<div id="summary">Running…</div>
+<table>
+  <thead><tr><th>Test</th><th>Suite</th><th>Result / Detail</th></tr></thead>
+  <tbody id="results"></tbody>
+</table>
+<div id="log"><strong>Console:</strong><br></div>
+
+<!-- Stub canvas (engine needs it) -->
+<canvas id="game-canvas" style="display:none"></canvas>
+
+<!-- Global namespace -->
+<script>window.ProcMario = {};</script>
+
+<!-- Core scripts (same load order as index.html) -->
+<script src="js/physics.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/tiles.js"></script>
+<script src="js/tilemap.js"></script>
+<script src="js/themes.js"></script>
+<script src="js/levelgen.js"></script>
+<script src="js/pixelart.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/player.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/items.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/objects.js"></script>
+<script src="js/touch.js"></script>
+<script src="js/replay.js"></script>
+<!-- main.js intentionally omitted: it auto-initialises and starts the game loop -->
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Tiny test runner ──────────────────────────────────────────────
+  var results = [];
+  var logEl   = document.getElementById('log');
+
+  function pass(suite, name, detail) {
+    results.push({ suite: suite, name: name, ok: true, detail: detail || '' });
+  }
+  function fail(suite, name, detail) {
+    results.push({ suite: suite, name: name, ok: false, detail: detail || '' });
+  }
+  function assert(suite, name, cond, detail) {
+    if (cond) pass(suite, name, detail);
+    else       fail(suite, name, detail);
+  }
+  function tryRun(suite, name, fn) {
+    try {
+      var result = fn();
+      if (result === false) fail(suite, name, 'returned false');
+      else pass(suite, name);
+    } catch (e) {
+      fail(suite, name, 'threw: ' + e.message);
+    }
+  }
+  function log(msg, cls) {
+    var line = document.createElement('div');
+    line.textContent = msg;
+    if (cls) line.className = cls;
+    logEl.appendChild(line);
+  }
+
+  // ── Suite 1: TileType definitions ────────────────────────────────
+  (function() {
+    var suite = 'TileType';
+    var T = ProcMario.TileType;
+
+    assert(suite, 'TileType exists', !!T);
+    assert(suite, 'EMPTY === 0',        T.EMPTY        === 0);
+    assert(suite, 'GROUND exists',      typeof T.GROUND === 'number');
+    assert(suite, 'WATER === 17',       T.WATER        === 17);
+    assert(suite, 'VINE === 18',        T.VINE         === 18);
+    assert(suite, 'LAVA === 14',        T.LAVA         === 14);
+    assert(suite, 'NOTE_BLOCK === 16',  T.NOTE_BLOCK   === 16);
+    assert(suite, 'FLAGPOLE exists',    typeof T.FLAGPOLE === 'number');
+
+    // isSolid should return true for solid tiles
+    tryRun(suite, 'isSolid(GROUND) is true', function() {
+      return ProcMario.isSolid(T.GROUND) === true;
+    });
+    tryRun(suite, 'isSolid(EMPTY) is false', function() {
+      return ProcMario.isSolid(T.EMPTY) === false;
+    });
+    tryRun(suite, 'isSolid(WATER) is false', function() {
+      return ProcMario.isSolid(T.WATER) === false;
+    });
+  })();
+
+  // ── Suite 2: Physics ──────────────────────────────────────────────
+  (function() {
+    var suite = 'Physics';
+    var P = ProcMario.Physics;
+
+    assert(suite, 'Physics exists',        !!P);
+    assert(suite, 'TILE_SIZE === 16',      P.TILE_SIZE === 16);
+    assert(suite, 'GRAVITY > 0',           P.GRAVITY   > 0);
+    assert(suite, 'JUMP_FORCE defined',    typeof P.JUMP_FORCE === 'number');
+
+    // checkEntityCollision
+    tryRun(suite, 'checkEntityCollision overlapping returns true', function() {
+      var a = { x: 0,  y: 0,  w: 16, h: 16 };
+      var b = { x: 8,  y: 8,  w: 16, h: 16 };
+      return P.checkEntityCollision(a, b) === true;
+    });
+    tryRun(suite, 'checkEntityCollision separated returns false', function() {
+      var a = { x: 0,  y: 0,  w: 16, h: 16 };
+      var b = { x: 32, y: 32, w: 16, h: 16 };
+      return P.checkEntityCollision(a, b) === false;
+    });
+
+    // getTilesInRange
+    tryRun(suite, 'getTilesInRange returns array', function() {
+      var tiles = P.getTilesInRange(0, 0, 32, 32);
+      return Array.isArray(tiles) && tiles.length > 0;
+    });
+
+    // checkInWater with no data returns false (guard)
+    tryRun(suite, 'checkInWater returns false if no tilemap', function() {
+      return P.checkInWater({ x:0, y:0, w:16, h:16 }, null) === false;
+    });
+  })();
+
+  // ── Suite 3: Camera ───────────────────────────────────────────────
+  (function() {
+    var suite = 'Camera';
+    var cam = new ProcMario.Camera(256, 240);
+
+    assert(suite, 'Camera created',         !!cam);
+    assert(suite, 'Initial x === 0',        cam.x === 0);
+    assert(suite, 'Initial y === 0',        cam.y === 0);
+
+    tryRun(suite, 'setLevelBounds works', function() {
+      cam.setLevelBounds(3200, 240);
+      return cam.levelWidth === 3200;
+    });
+    tryRun(suite, 'worldToScreen within bounds', function() {
+      cam.x = 100; cam.y = 0;
+      var s = cam.worldToScreen(116, 0);
+      return s.x === 16 && s.y === 0;
+    });
+    tryRun(suite, 'isVisible works (entity on screen)', function() {
+      cam.x = 0; cam.y = 0;
+      return cam.isVisible(0, 0, 16, 16) === true;
+    });
+    tryRun(suite, 'isVisible works (entity far off screen)', function() {
+      cam.x = 0;
+      return cam.isVisible(5000, 0, 16, 16) === false;
+    });
+    tryRun(suite, 'getVisibleTileRange returns object', function() {
+      var r = cam.getVisibleTileRange(16);
+      return typeof r.startCol === 'number' && typeof r.endCol === 'number';
+    });
+  })();
+
+  // ── Suite 4: InputManager ─────────────────────────────────────────
+  (function() {
+    var suite = 'InputManager';
+    var im = new ProcMario.InputManager();
+
+    assert(suite, 'InputManager created', !!im);
+    assert(suite, 'keys object exists',   !!im.keys);
+    assert(suite, 'pressed object exists',!!im.pressed);
+
+    tryRun(suite, 'isDown returns false for unknown key', function() {
+      return im.isDown('KeyQ') === false;
+    });
+    tryRun(suite, 'isPressed returns false for unknown key', function() {
+      return im.isPressed('Space') === false;
+    });
+    tryRun(suite, '_replayOverride: left() returns override value', function() {
+      im._replayOverride = { left: true, right: false, up: false, down: false,
+                             jump: false, jumpHeld: false, run: false };
+      var result = im.left() === true && im.right() === false;
+      im._replayOverride = null;
+      return result;
+    });
+    tryRun(suite, 'isPressed handles GamepadStart → Enter', function() {
+      im.pressed['GamepadStart'] = true;
+      var result = im.isPressed('Enter');
+      im.pressed['GamepadStart'] = false;
+      return result === true;
+    });
+  })();
+
+  // ── Suite 5: TileMap ──────────────────────────────────────────────
+  (function() {
+    var suite = 'TileMap';
+
+    tryRun(suite, 'TileMap constructor', function() {
+      var tm = new ProcMario.TileMap(32, 15);
+      return tm.width === 32 && tm.height === 15;
+    });
+    tryRun(suite, 'loadFromArray stores data', function() {
+      var tm = new ProcMario.TileMap(4, 4);
+      var grid = [];
+      for (var r = 0; r < 4; r++) { grid.push([0,0,0,0]); }
+      grid[3][0] = ProcMario.TileType.GROUND;
+      tm.loadFromArray(grid);
+      return tm.getTile(0, 3) === ProcMario.TileType.GROUND;
+    });
+    tryRun(suite, 'getTile out-of-bounds returns 0', function() {
+      var tm = new ProcMario.TileMap(4, 4);
+      return tm.getTile(100, 100) === 0;
+    });
+  })();
+
+  // ── Suite 6: LevelGenerator ───────────────────────────────────────
+  (function() {
+    var suite = 'LevelGenerator';
+    var LG = ProcMario.LevelGenerator;
+    var T  = ProcMario.TileType;
+
+    var themes = ['overworld', 'underground', 'sky', 'castle', 'ice', 'water'];
+
+    themes.forEach(function(theme) {
+      // Generate a level for each theme
+      tryRun(suite, 'generate() returns valid object [' + theme + ']', function() {
+        var gen = new LG(42, 0.5, theme);
+        var lvl = gen.generate();
+        return lvl && lvl.width > 0 && lvl.height > 0 && Array.isArray(lvl.tiles);
+      });
+
+      tryRun(suite, 'level has flagpole tile [' + theme + ']', function() {
+        var gen = new LG(99, 0.5, theme);
+        var lvl = gen.generate();
+        // Scan grid for FLAGPOLE
+        var found = false;
+        for (var row = 0; row < lvl.height && !found; row++) {
+          for (var col = 0; col < lvl.width && !found; col++) {
+            if (lvl.tiles[row][col] === T.FLAGPOLE || lvl.tiles[row][col] === T.FLAGPOLE_TOP) {
+              found = true;
+            }
+          }
+        }
+        // Castle boss levels use Bowser instead of flagpole — skip check for them
+        if (theme === 'castle') return true;
+        return found;
+      });
+
+      tryRun(suite, 'no gap wider than MAX_JUMP_TILES (5) [' + theme + ']', function() {
+        var gen = new LG(123, 0.7, theme);
+        var lvl = gen.generate();
+        var groundRow = 13;
+        var maxGap = 0;
+        var gapRun = 0;
+        for (var col = 0; col < lvl.width; col++) {
+          // Check if column has any solid tile at or below ground row
+          var hasSolid = false;
+          for (var row = groundRow; row < lvl.height; row++) {
+            if (ProcMario.isSolid(lvl.tiles[row][col])) { hasSolid = true; break; }
+          }
+          // Also check if there's a platform in the upper rows for sky theme
+          if (!hasSolid && theme === 'sky') {
+            for (var row2 = 0; row2 < groundRow; row2++) {
+              if (ProcMario.isSolid(lvl.tiles[row2][col])) { hasSolid = true; break; }
+            }
+          }
+          if (!hasSolid) {
+            gapRun++;
+            if (gapRun > maxGap) maxGap = gapRun;
+          } else {
+            gapRun = 0;
+          }
+        }
+        if (maxGap > 5) {
+          log('[WARN] ' + theme + ' seed 123: max gap = ' + maxGap + ' tiles (threshold = 5)', 'err');
+        }
+        return maxGap <= 5;
+      });
+    });
+
+    // Multiple seeds for overworld — ensure entity list has sane counts
+    tryRun(suite, 'entity count in range [overworld, 10 seeds]', function() {
+      for (var seed = 1; seed <= 10; seed++) {
+        var gen = new LG(seed, 0.5, 'overworld');
+        var lvl = gen.generate();
+        var count = lvl.entities.length;
+        if (count < 1 || count > 200) {
+          log('[WARN] seed ' + seed + ': entity count = ' + count);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Water theme: WATER tiles should be present
+    tryRun(suite, 'water theme floods level with WATER tiles', function() {
+      var gen = new LG(7, 0.5, 'water');
+      var lvl = gen.generate();
+      var waterCount = 0;
+      for (var r = 0; r < lvl.height; r++) {
+        for (var c = 0; c < lvl.width; c++) {
+          if (lvl.tiles[r][c] === T.WATER) waterCount++;
+        }
+      }
+      return waterCount > 50;
+    });
+
+    // Castle theme: LAVA tiles should be present
+    tryRun(suite, 'castle theme contains LAVA tiles', function() {
+      var gen = new LG(5, 0.8, 'castle');
+      var lvl = gen.generate();
+      var lavaCount = 0;
+      for (var r = 0; r < lvl.height; r++) {
+        for (var c = 0; c < lvl.width; c++) {
+          if (lvl.tiles[r][c] === T.LAVA) lavaCount++;
+        }
+      }
+      return lavaCount > 0;
+    });
+
+    // Determinism: same seed → same level
+    tryRun(suite, 'generation is deterministic (same seed)', function() {
+      var lvl1 = new LG(555, 0.5, 'overworld').generate();
+      var lvl2 = new LG(555, 0.5, 'overworld').generate();
+      if (lvl1.width !== lvl2.width || lvl1.height !== lvl2.height) return false;
+      for (var r = 0; r < lvl1.height; r++) {
+        for (var c = 0; c < lvl1.width; c++) {
+          if (lvl1.tiles[r][c] !== lvl2.tiles[r][c]) return false;
+        }
+      }
+      return true;
+    });
+  })();
+
+  // ── Suite 7: Enemy factory ────────────────────────────────────────
+  (function() {
+    var suite = 'Enemies';
+
+    // Build a minimal mock tilemap for physics
+    function makeTilemap(w, h) {
+      return { width: w, height: h, data: new Uint8Array(w * h) };
+    }
+
+    var types = ['goomba', 'koopa', 'piranha', 'buzzy', 'hammerbro',
+                 'cheep', 'spiny', 'lakitu', 'bowser'];
+
+    types.forEach(function(type) {
+      tryRun(suite, 'createFromData: ' + type, function() {
+        var e = ProcMario.Enemies.createFromData({ type: type, x: 100, y: 100 });
+        if (!e) throw new Error('returned null');
+        if (typeof e.update !== 'function') throw new Error('no update()');
+        if (typeof e.render !== 'function') throw new Error('no render()');
+        return true;
+      });
+    });
+
+    // CheepCheep: jumping fish should have vy property
+    tryRun(suite, 'CheepCheep has vy', function() {
+      var e = ProcMario.Enemies.createFromData({ type: 'cheep', x: 0, y: 100 });
+      return typeof e.vy === 'number';
+    });
+
+    // Bowser: should have _hp property
+    tryRun(suite, 'Bowser has _hp === 3', function() {
+      var e = ProcMario.Enemies.createFromData({ type: 'bowser', x: 0, y: 100 });
+      return e._hp === 3;
+    });
+
+    // Spiny: fireproof should NOT be set (it's stomp-immune, not fire-immune)
+    tryRun(suite, 'Spiny is NOT fireproof', function() {
+      var e = ProcMario.Enemies.createFromData({ type: 'spiny', x: 0, y: 100 });
+      return !e.fireproof;
+    });
+
+    // Bowser: should be fireproof
+    tryRun(suite, 'Bowser is fireproof', function() {
+      var e = ProcMario.Enemies.createFromData({ type: 'bowser', x: 0, y: 100 });
+      return e.fireproof === true;
+    });
+
+    // BuzzyBeetle: fireproof
+    tryRun(suite, 'BuzzyBeetle is fireproof', function() {
+      var e = ProcMario.Enemies.createFromData({ type: 'buzzy', x: 0, y: 100 });
+      return e.fireproof === true;
+    });
+  })();
+
+  // ── Suite 8: Items ────────────────────────────────────────────────
+  (function() {
+    var suite = 'Items';
+
+    tryRun(suite, 'spawnIceBall factory exists', function() {
+      return typeof ProcMario.Items.spawnIceBall === 'function';
+    });
+
+    // Mushroom entity
+    tryRun(suite, 'Mushroom has update + render', function() {
+      var m = new ProcMario.Items.Mushroom(32, 100);
+      return typeof m.update === 'function' && typeof m.render === 'function';
+    });
+
+    // Star entity
+    tryRun(suite, 'Star entity exists and has properties', function() {
+      var s = new ProcMario.Items.Star(32, 100);
+      return s.type === 'star';
+    });
+  })();
+
+  // ── Suite 9: Player ───────────────────────────────────────────────
+  (function() {
+    var suite = 'Player';
+
+    // Minimal mock game
+    function makeMockGame() {
+      var tm = { width: 200, height: 15, data: new Uint8Array(200 * 15) };
+      // Fill ground row
+      for (var c = 0; c < 200; c++) { tm.data[13 * 200 + c] = ProcMario.TileType.GROUND; }
+      return {
+        tilemap: tm,
+        events: new ProcMario.EventBus(),
+        entities: [],
+        score: 0, coins: 0, lives: 3, time: 400,
+        addEntity: function(e) { this.entities.push(e); return e; },
+        removeEntity: function(e) { e.dead = true; }
+      };
+    }
+
+    tryRun(suite, 'Player constructor', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 100, g);
+      return p.type === 'player' && typeof p.update === 'function';
+    });
+
+    tryRun(suite, 'Player.powerUp mushroom grows player', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      g.player = p;
+      p.powerState = 'small';
+      p.powerUp('mushroom');
+      return p.powerState === 'big' && p.h === 32;
+    });
+
+    tryRun(suite, 'Player.powerUp ice awards ice state', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      g.player = p;
+      p.powerState = 'big';
+      p.powerUp('ice');
+      return p.powerState === 'ice';
+    });
+
+    tryRun(suite, 'Player.powerUp cape awards cape state', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      g.player = p;
+      p.powerState = 'big';
+      p.powerUp('cape');
+      return p.powerState === 'cape';
+    });
+
+    tryRun(suite, 'Player.powerUp mini shrinks player', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      g.player = p;
+      p.powerState = 'small';
+      p.powerUp('mini');
+      return p.powerState === 'mini' && p.w === 10 && p.h === 10;
+    });
+
+    tryRun(suite, 'Player.takeDamage exists and is callable', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      g.player = p;
+      p.powerState = 'big';
+      p.takeDamage(g); // should shrink to small, not crash
+      return p.powerState === 'small';
+    });
+
+    tryRun(suite, 'Player has NO .damage() method (crash-bug guard)', function() {
+      var g = makeMockGame();
+      var p = new ProcMario.Player(48, 160, g);
+      return typeof p.damage !== 'function';
+    });
+  })();
+
+  // ── Suite 10: Replay system ────────────────────────────────────────
+  (function() {
+    var suite = 'Replay';
+
+    tryRun(suite, 'ReplayRecorder exists', function() {
+      return !!ProcMario.ReplayRecorder;
+    });
+    tryRun(suite, 'ReplayPlayer exists', function() {
+      return !!ProcMario.ReplayPlayer;
+    });
+
+    tryRun(suite, 'record + playback round-trip', function() {
+      ProcMario.ReplayRecorder.start(42);
+      var inputs1 = { left: true,  right: false, jump: true,  jumpHeld: true,
+                      run: false, down: false, up: false };
+      var inputs2 = { left: false, right: true,  jump: false, jumpHeld: false,
+                      run: true,  down: false, up: false };
+      ProcMario.ReplayRecorder.recordFrame(inputs1);
+      ProcMario.ReplayRecorder.recordFrame(inputs2);
+      var rd = ProcMario.ReplayRecorder.stop('test');
+
+      ProcMario.ReplayPlayer.load(rd);
+      var out1 = ProcMario.ReplayPlayer.getInputs(0);
+      var out2 = ProcMario.ReplayPlayer.getInputs(1);
+
+      return out1.left === true  && out1.jump === true  && out1.right === false &&
+             out2.right === true && out2.run  === true  && out2.left  === false;
+    });
+
+    tryRun(suite, 'isFinished returns true past end', function() {
+      ProcMario.ReplayRecorder.start(1);
+      ProcMario.ReplayRecorder.recordFrame({ left:false, right:false, jump:false,
+                                             jumpHeld:false, run:false, down:false, up:false });
+      var rd = ProcMario.ReplayRecorder.stop('t2');
+      ProcMario.ReplayPlayer.load(rd);
+      return ProcMario.ReplayPlayer.isFinished(10) === true;
+    });
+
+    tryRun(suite, 'RLE compression preserves data', function() {
+      ProcMario.ReplayRecorder.start(99);
+      // 100 identical frames
+      var noop = { left:false, right:false, jump:false, jumpHeld:false, run:false, down:false, up:false };
+      for (var i = 0; i < 100; i++) ProcMario.ReplayRecorder.recordFrame(noop);
+      var rd = ProcMario.ReplayRecorder.stop('rle');
+      ProcMario.ReplayPlayer.load(rd);
+      // All 100 frames should decode as all-false
+      for (var f = 0; f < 100; f++) {
+        var inp = ProcMario.ReplayPlayer.getInputs(f);
+        if (inp.left || inp.right || inp.jump) return false;
+      }
+      return true;
+    });
+  })();
+
+  // ── Suite 11: ChunkManager ────────────────────────────────────────
+  (function() {
+    var suite = 'ChunkManager';
+
+    tryRun(suite, 'ChunkManager constructor', function() {
+      var tm = { width: 200, height: 15, data: new Uint8Array(200 * 15) };
+      var cm = new ProcMario.ChunkManager(tm);
+      return !!cm;
+    });
+
+    tryRun(suite, 'ChunkManager.update does not crash', function() {
+      var tm = { width: 200, height: 15, data: new Uint8Array(200 * 15) };
+      var cm = new ProcMario.ChunkManager(tm);
+      cm.update(0);
+      cm.update(64);
+      cm.update(512);
+      cm.update(0); // scroll back
+      return true;
+    });
+
+    tryRun(suite, 'Evicted tiles restore correctly', function() {
+      var W = 200, H = 15;
+      var tm = { width: W, height: H, data: new Uint8Array(W * H) };
+      // Write a known value at column 10
+      var T_VAL = 2; // GROUND_TOP
+      for (var r = 0; r < H; r++) tm.data[r * W + 10] = T_VAL;
+
+      var cm = new ProcMario.ChunkManager(tm);
+      cm.update(0);
+
+      // Scroll far enough to evict chunk 0
+      cm.update(2000);
+      // Scroll back to reload chunk 0
+      cm.update(0);
+
+      // Column 10 data should still be correct
+      for (var row = 0; row < H; row++) {
+        if (tm.data[row * W + 10] !== T_VAL) return false;
+      }
+      return true;
+    });
+  })();
+
+  // ── Suite 12: Themes ─────────────────────────────────────────────
+  (function() {
+    var suite = 'Themes';
+
+    tryRun(suite, 'getThemeForLevel exists', function() {
+      return typeof ProcMario.getThemeForLevel === 'function';
+    });
+
+    var expected = [
+      [1, 'overworld'], [2, 'underground'], [3, 'sky'], [4, 'castle'],
+      [5, 'ice'], [6, 'water'], [7, 'overworld']
+    ];
+    expected.forEach(function(pair) {
+      tryRun(suite, 'level ' + pair[0] + ' → ' + pair[1], function() {
+        var t = ProcMario.getThemeForLevel(pair[0]);
+        return t === pair[1];
+      });
+    });
+
+    tryRun(suite, 'THEME_PROPS returns skyColor for overworld', function() {
+      var d = ProcMario.THEME_PROPS && ProcMario.THEME_PROPS['overworld'];
+      return d && typeof d.skyColor === 'string';
+    });
+
+    tryRun(suite, 'water theme skyColor is dark blue', function() {
+      var d = ProcMario.THEME_PROPS && ProcMario.THEME_PROPS['water'];
+      return d && d.skyColor === '#003060';
+    });
+  })();
+
+  // ── Render results ────────────────────────────────────────────────
+  var passCount = results.filter(function(r) { return r.ok; }).length;
+  var failCount = results.length - passCount;
+
+  document.getElementById('ts').textContent =
+    'Run at ' + new Date().toISOString();
+
+  var sumEl = document.getElementById('summary');
+  sumEl.innerHTML =
+    '<span class="pass">' + passCount + ' passed</span> / ' +
+    '<span class="fail">' + failCount + ' failed</span> / ' +
+    results.length + ' total';
+
+  var tbody = document.getElementById('results');
+  results.forEach(function(r) {
+    var tr = document.createElement('tr');
+    tr.className = r.ok ? 'pass-row' : 'fail-row';
+    tr.innerHTML =
+      '<td>' + escHtml(r.name) + '</td>' +
+      '<td>' + escHtml(r.suite) + '</td>' +
+      '<td>' + (r.ok ? '<span class="pass">PASS</span>' :
+        '<span class="fail">FAIL</span>' +
+        (r.detail ? '<div class="detail">' + escHtml(r.detail) + '</div>' : '')) +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+})();
+</script>
+</body>
+</html>
