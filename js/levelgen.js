@@ -56,10 +56,13 @@ window.ProcMario = window.ProcMario || {};
    * @param {string} theme      - 'overworld' | 'underground' | 'sky' | 'castle'
    */
   function LevelGenerator(seed, difficulty, theme) {
-    this.seed       = seed !== undefined ? seed : Math.floor(Math.random() * 2147483647);
-    this.difficulty = Math.max(0, Math.min(1, difficulty || 0));
-    this.theme      = theme || 'overworld';
-    this.rand       = mulberry32(this.seed);
+    this.seed              = seed !== undefined ? seed : Math.floor(Math.random() * 2147483647);
+    this.difficulty        = Math.max(0, Math.min(1, difficulty || 0));
+    this.theme             = theme || 'overworld';
+    this.rand              = mulberry32(this.seed);
+    this.levelWidth        = 0;
+    this._firstPipeSeen    = false;
+    this._firstBlockPlaced = false;
   }
 
   // ---------------------------------------------------------------
@@ -95,15 +98,50 @@ window.ProcMario = window.ProcMario || {};
     // ---- Build level in segments ----
     var cursor = 0;
 
-    // 1. Safe starting area (flat, 10 tiles)
-    cursor = this._placeFlat(grid, cursor, 10, false);
+    this.levelWidth        = width;
+    this._firstPipeSeen    = false;
+    this._firstBlockPlaced = false;
 
-    // 2. Main body segments
+    // 1. SMB-style intro: flat ground, one Goomba, guaranteed mushroom block
+    cursor = this._buildIntro(grid, entities, cursor);
+
+    // 2. Force first real segment to be easy (FLAT or PIPES) — never a gap or challenge
+    var firstSegType  = this.rand() < 0.5 ? SegType.FLAT : SegType.PIPES;
+    var firstSegWidth = this._segmentWidth(firstSegType);
+    if (cursor + firstSegWidth <= width - 20) {
+      cursor = this._buildSegment(grid, entities, cursor, firstSegType, firstSegWidth);
+    }
+
+    // 3. Main body segments — with narrative arc and difficulty ramp
+    var consecutiveHard = 0;
+    var HARD_SEGS = [SegType.GAP, SegType.CHALLENGE, SegType.VERTICAL];
+
     while (cursor < width - 20) {
-      var segType = this._pickSegment();
-      var segWidth = this._segmentWidth(segType);
+      var levelProgress = cursor / width;
 
-      // Don't overshoot
+      // Ramp difficulty within the level: gentle start, full pressure at end
+      var baseDiff    = this.difficulty;
+      this.difficulty = Math.min(1, baseDiff * (0.3 + levelProgress * 0.7));
+
+      var segType = this._pickSegment();
+
+      this.difficulty = baseDiff; // restore
+
+      // Gate: no CHALLENGE or GAP until the player has learned the basics
+      if (segType === SegType.CHALLENGE && levelProgress < 0.25) segType = SegType.FLAT;
+      if (segType === SegType.GAP       && levelProgress < 0.12) segType = SegType.FLAT;
+
+      // Narrative arc: force a rest (FLAT) after 2 consecutive hard segments
+      if (consecutiveHard >= 2) {
+        segType = SegType.FLAT;
+        consecutiveHard = 0;
+      } else if (HARD_SEGS.indexOf(segType) >= 0) {
+        consecutiveHard++;
+      } else {
+        consecutiveHard = 0;
+      }
+
+      var segWidth = this._segmentWidth(segType);
       if (cursor + segWidth > width - 20) break;
 
       cursor = this._buildSegment(grid, entities, cursor, segType, segWidth);
@@ -333,6 +371,14 @@ window.ProcMario = window.ProcMario || {};
     }
   };
 
+  // Return a ground-enemy that respects level progression — simpler enemies early,
+  // full roster late, mirroring SMB's Goomba→Koopa→advanced enemy escalation.
+  LevelGenerator.prototype._pickEnemyForPosition = function (levelProgress) {
+    if (levelProgress < 0.20) return 'goomba';
+    if (levelProgress < 0.50) return this.rand() < 0.65 ? 'goomba' : 'koopa';
+    return this._pickEnemy();
+  };
+
   // -- FLAT --
   LevelGenerator.prototype._buildFlat = function (grid, entities, cursor, w) {
     this._fillGround(grid, cursor, cursor + w);
@@ -354,10 +400,32 @@ window.ProcMario = window.ProcMario || {};
       }
     }
 
-    // Enemy on flat ground
+    // Short coin trail to invite the player forward (navigation signal)
+    if (this.rand() < 0.6) {
+      var trailX   = cursor + this._randInt(2, Math.max(3, w - 6));
+      var trailLen = this._randInt(3, 5);
+      this._placeCoinLine(grid, trailX, GROUND_Y - 3, trailLen);
+    }
+
+    // Enemy group: 1 early in level, up to 3 late — mirrors the SMB 1→2→3 Goomba escalation
     if (this.rand() < 0.3 + this.difficulty * 0.4) {
-      var ex = cursor + this._randInt(3, w - 2);
-      entities.push({ type: this._pickEnemy(), x: ex, y: GROUND_Y - 1, patrolMinX: cursor + 1, patrolMaxX: cursor + w - 1 });
+      var levelProgress = this.levelWidth > 0 ? cursor / this.levelWidth : 0.5;
+      var maxGroup      = Math.max(1, Math.floor(1 + levelProgress * 2)); // 1 → 3
+      var numEnemies    = this._randInt(1, Math.min(maxGroup, 3));
+      var spacing       = 3; // tiles between enemies in the group
+
+      for (var ei = 0; ei < numEnemies; ei++) {
+        var ex = cursor + 3 + ei * spacing;
+        if (ex < cursor + w - 1) {
+          entities.push({
+            type: this._pickEnemyForPosition(levelProgress),
+            x: ex,
+            y: GROUND_Y - 1,
+            patrolMinX: cursor + 1,
+            patrolMaxX: cursor + w - 1
+          });
+        }
+      }
     }
 
     return cursor + w;
@@ -383,25 +451,27 @@ window.ProcMario = window.ProcMario || {};
     if (rightW < 2) rightW = 2;
     this._fillGround(grid, cursor + leftW + gapW, cursor + leftW + gapW + rightW);
 
-    // Coins over the gap in an arc
-    if (this.rand() < 0.7) {
-      this._placeCoinArc(grid, cursor + leftW, GROUND_Y - 3, gapW);
-    }
+    // Coins over the gap in an arc — always placed to show jump trajectory (SMB standard)
+    this._placeCoinArc(grid, cursor + leftW, GROUND_Y - 3, gapW);
 
     return cursor + leftW + gapW + rightW;
   };
 
   // -- PLATFORMS --
+  // Builds a connected chain of platforms, each within jumping distance of the previous,
+  // so there is always a clear traversal path — inspired by SMB 1-3 treetop design.
   LevelGenerator.prototype._buildPlatforms = function (grid, entities, cursor, w) {
-    // 30% chance to include a moving platform instead of (or in addition to) static ones
+    this._fillGround(grid, cursor, cursor + w);
+
+    // Optional moving platform (keep existing feature)
     if (this.rand() < 0.3) {
-      var mpX = cursor + this._randInt(2, w - 5);
-      var mpY = GROUND_Y - this._randInt(3, 5);
-      var mpW = this._randInt(3, 5) * 16; // width in pixels
+      var mpX    = cursor + this._randInt(2, w - 5);
+      var mpY    = GROUND_Y - this._randInt(3, 5);
+      var mpW    = this._randInt(3, 5) * 16;
       var mpType = this.rand() < 0.5 ? 'horizontal' : 'vertical';
       entities.push({
         type: 'moving_platform',
-        x: mpX * 16, // pixel coords
+        x: mpX * 16,
         y: mpY * 16,
         w: mpW,
         moveType: mpType,
@@ -409,37 +479,55 @@ window.ProcMario = window.ProcMario || {};
       });
     }
 
-    this._fillGround(grid, cursor, cursor + w);
+    // Build a connected platform chain: each platform within jump reach of the previous
+    var numPlats     = this._randInt(2, 3);
+    var prevEdgeX    = cursor + 1; // right edge of the previous landing surface
+    var prevY        = GROUND_Y;   // y of previous landing surface (start from ground)
+    var koopasPlaced = 0;
 
-    // Place 1-3 platforms at varying heights
-    var numPlats = this._randInt(1, 3);
     for (var i = 0; i < numPlats; i++) {
-      var platX = cursor + this._randInt(1, w - 5);
-      var platW = this._randInt(3, 6);
-      var platY = GROUND_Y - this._randInt(3, 6);
+      var platW    = this._randInt(3, 5);
+      var horizGap = this._randInt(2, Math.min(4, MAX_JUMP_TILES - 1)); // jumpable gap
+      var platX    = prevEdgeX + horizGap;
 
-      // Use bricks or hard blocks
+      // Vertical change within jump height, slightly biased upward for variety
+      var vertChange = this._randInt(-2, 3);
+      var platY      = prevY - vertChange;
+      platY = Math.max(GROUND_Y - MAX_JUMP_HEIGHT * 2, Math.min(GROUND_Y - 2, platY));
+
+      if (platX + platW > cursor + w) break; // out of segment bounds
+
       var blockType = this.rand() < 0.5 ? T.BRICK : T.HARD_BLOCK;
       for (var bx = platX; bx < platX + platW && bx < cursor + w; bx++) {
         grid[platY][bx] = blockType;
       }
 
-      // Question block on platform
+      // Coin above platform center — visual navigation signal ("land here")
+      var coinX = platX + Math.floor(platW / 2);
+      if (coinX < cursor + w && platY - 1 >= 0) {
+        grid[platY - 1][coinX] = T.COIN;
+      }
+
+      // Question block on platform (50% chance)
       if (this.rand() < 0.5 && platW >= 3) {
         var qx = platX + Math.floor(platW / 2);
         this._placeQuestionBlock(grid, entities, qx, platY);
       }
 
-      // Koopa on platform (patrol clamped to platform width)
-      if (this.rand() < 0.3 + this.difficulty * 0.3) {
-        entities.push({ type: 'koopa', x: platX + 1, y: platY - 1, patrolMinX: platX, patrolMaxX: platX + platW });
+      // At most one Koopa across the whole platform section (one threat at a time)
+      if (koopasPlaced === 0 && this.rand() < 0.3 + this.difficulty * 0.3) {
+        entities.push({
+          type: 'koopa',
+          x: platX + 1,
+          y: platY - 1,
+          patrolMinX: platX,
+          patrolMaxX: platX + platW
+        });
+        koopasPlaced++;
       }
-    }
 
-    // Coins between platforms
-    if (this.rand() < 0.5) {
-      var cx = cursor + this._randInt(2, w - 3);
-      this._placeCoinLine(grid, cx, GROUND_Y - 2, this._randInt(3, 5));
+      prevEdgeX = platX + platW;
+      prevY     = platY;
     }
 
     return cursor + w;
@@ -458,8 +546,13 @@ window.ProcMario = window.ProcMario || {};
       var pipeH = this._randInt(2, 4);
       this._placePipe(grid, px, GROUND_Y, pipeH);
 
-      // Piranha plant in pipe
-      var hasPiranha = this.rand() < 0.2 + this.difficulty * 0.4;
+      // First pipe in the level is always safe — player learns pipes before facing danger
+      var hasPiranha = false;
+      if (this._firstPipeSeen) {
+        hasPiranha = this.rand() < 0.2 + this.difficulty * 0.4;
+      } else {
+        this._firstPipeSeen = true;
+      }
       if (hasPiranha) {
         entities.push({ type: 'piranha', x: px, y: GROUND_Y - pipeH - 1 });
       }
@@ -562,9 +655,12 @@ window.ProcMario = window.ProcMario || {};
       entities.push({ type: this._pickEnemy(), x: exx, y: GROUND_Y - 1, patrolMinX: challengePatrolMin, patrolMaxX: challengePatrolMax });
     }
 
-    // Power-up before the challenge
-    if (this.rand() < 0.6) {
-      this._placeQuestionBlock(grid, entities, cursor + 2, GROUND_Y - 4);
+    // Power-up before the challenge — nearly guaranteed (95%), always a mushroom
+    if (this.rand() < 0.95) {
+      var preX = cursor + 2;
+      var preY = GROUND_Y - 4;
+      grid[preY][preX] = T.QUESTION;
+      entities.push({ type: 'question_block', x: preX, y: preY, contents: 'mushroom' });
     }
 
     // Coins over gap
@@ -745,13 +841,37 @@ window.ProcMario = window.ProcMario || {};
     if (y < 0 || y >= LEVEL_HEIGHT || x < 0 || x >= grid[0].length) return;
     grid[y][x] = T.QUESTION;
 
-    // Decide contents
-    var r = this.rand();
     var contents;
-    if (r < 0.60) contents = 'coin';
-    else if (r < 0.85) contents = 'mushroom';
-    else if (r < 0.95) contents = 'star';
-    else contents = '1up';
+
+    if (!this._firstBlockPlaced) {
+      // Very first ? block: always a mushroom — mirrors SMB 1-1 where the first block
+      // is positioned so the player almost inevitably picks up the mushroom
+      contents = 'mushroom';
+      this._firstBlockPlaced = true;
+    } else {
+      // Context-aware contents: more mushrooms early, more stars and 1-ups late
+      var lp = this.levelWidth > 0 ? x / this.levelWidth : 0.5;
+      var r   = this.rand();
+      if (lp < 0.30) {
+        // Early level: coins and mushrooms dominate
+        if (r < 0.50)      contents = 'coin';
+        else if (r < 0.85) contents = 'mushroom';
+        else if (r < 0.95) contents = 'star';
+        else               contents = '1up';
+      } else if (lp < 0.70) {
+        // Mid level: standard mix
+        if (r < 0.55)      contents = 'coin';
+        else if (r < 0.80) contents = 'mushroom';
+        else if (r < 0.92) contents = 'star';
+        else               contents = '1up';
+      } else {
+        // Late level: reward with more stars and 1-ups
+        if (r < 0.45)      contents = 'coin';
+        else if (r < 0.70) contents = 'mushroom';
+        else if (r < 0.88) contents = 'star';
+        else               contents = '1up';
+      }
+    }
 
     entities.push({ type: 'question_block', x: x, y: y, contents: contents });
   };
@@ -942,6 +1062,33 @@ window.ProcMario = window.ProcMario || {};
         }
       }
     }
+  };
+
+  // ---------------------------------------------------------------
+  // SMB 1-1 style intro sequence
+  // ---------------------------------------------------------------
+  LevelGenerator.prototype._buildIntro = function (grid, entities, cursor) {
+    var w = 14; // wider breathing room than the original 10-tile flat start
+    this._fillGround(grid, cursor, cursor + w);
+
+    // Always-mushroom ? block at natural jump height — positioned so the player
+    // runs into it organically, mirroring SMB 1-1's can't-miss first block
+    var blockX = cursor + 7;
+    var blockY  = GROUND_Y - 4;
+    grid[blockY][blockX] = T.QUESTION;
+    this._firstBlockPlaced = true;
+    entities.push({ type: 'question_block', x: blockX, y: blockY, contents: 'mushroom' });
+
+    // Single Goomba walking toward the player — the classic first-enemy teaching moment
+    entities.push({
+      type: 'goomba',
+      x: cursor + 10,
+      y: GROUND_Y - 1,
+      patrolMinX: cursor + 6,
+      patrolMaxX: cursor + w - 1
+    });
+
+    return cursor + w;
   };
 
   // ---------------------------------------------------------------
