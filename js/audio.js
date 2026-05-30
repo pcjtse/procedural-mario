@@ -429,58 +429,104 @@ window.ProcMario = window.ProcMario || {};
     var beat = 60 / bpm;
     var eighth = beat / 2;
 
-    // Simple 4-bar melody in C major
+    // C major – dense, bouncy 8-bar melody
     var melody = [
       // Bar 1
-      523.25, 523.25, 0, 523.25, 0, 415.30, 523.25, 0,
-      659.25, 0, 0, 0, 329.63, 0, 0, 0,
+      659.25, 659.25, 659.25, 523.25, 659.25, 783.99, 0, 392.00,
       // Bar 2
-      392.00, 0, 0, 196.00, 0, 0, 261.63, 0,
-      0, 329.63, 0, 349.23, 329.63, 0, 0, 0,
+      523.25, 0, 392.00, 0, 329.63, 0, 440.00, 493.88,
       // Bar 3
-      523.25, 523.25, 0, 523.25, 0, 415.30, 523.25, 0,
-      659.25, 0, 0, 0, 329.63, 0, 0, 0,
+      466.16, 440.00, 0, 392.00, 659.25, 783.99, 880.00, 698.46,
       // Bar 4
-      392.00, 0, 0, 196.00, 0, 0, 261.63, 0,
-      0, 0, 0, 0, 0, 0, 0, 0
+      783.99, 659.25, 523.25, 587.33, 493.88, 0, 0, 0,
+      // Bar 5 (repeat A)
+      659.25, 659.25, 659.25, 523.25, 659.25, 783.99, 0, 392.00,
+      // Bar 6
+      523.25, 0, 392.00, 0, 329.63, 0, 440.00, 493.88,
+      // Bar 7 (turnaround)
+      466.16, 440.00, 392.00, 349.23, 329.63, 523.25, 392.00, 0,
+      // Bar 8
+      523.25, 0, 0, 0, 0, 0, 0, 0
     ];
 
-    // Bass line
+    // Harmony voice: parallel perfect 4th above melody
+    var harmony = [
+      // Bar 1
+      880.00, 880.00, 880.00, 698.46, 880.00, 1046.50, 0, 523.25,
+      // Bar 2
+      698.46, 0, 523.25, 0, 440.00, 0, 587.33, 659.25,
+      // Bar 3
+      622.25, 587.33, 0, 523.25, 880.00, 1046.50, 1174.66, 932.33,
+      // Bar 4
+      1046.50, 880.00, 698.46, 783.99, 659.25, 0, 0, 0,
+      // Bar 5
+      880.00, 880.00, 880.00, 698.46, 880.00, 1046.50, 0, 523.25,
+      // Bar 6
+      698.46, 0, 523.25, 0, 440.00, 0, 587.33, 659.25,
+      // Bar 7
+      622.25, 587.33, 523.25, 466.16, 440.00, 698.46, 523.25, 0,
+      // Bar 8
+      698.46, 0, 0, 0, 0, 0, 0, 0
+    ];
+
+    // Oom-pah bass: root on beats 1&3, fifth on beats 2&4
     var bass = [
-      130.81, 0, 130.81, 0, 130.81, 0, 130.81, 0,
-      164.81, 0, 164.81, 0, 164.81, 0, 164.81, 0,
-      196.00, 0, 196.00, 0, 196.00, 0, 196.00, 0,
-      130.81, 0, 130.81, 0, 196.00, 0, 130.81, 0,
-      130.81, 0, 130.81, 0, 130.81, 0, 130.81, 0,
-      164.81, 0, 164.81, 0, 164.81, 0, 164.81, 0,
-      196.00, 0, 196.00, 0, 196.00, 0, 196.00, 0,
-      130.81, 0, 130.81, 0, 196.00, 0, 130.81, 0
+      // Bar 1 – C/G
+      130.81, 0, 196.00, 0, 130.81, 0, 196.00, 0,
+      // Bar 2 – C/G
+      130.81, 0, 196.00, 0, 130.81, 0, 196.00, 0,
+      // Bar 3 – F/C
+      174.61, 0, 261.63, 0, 174.61, 0, 261.63, 0,
+      // Bar 4 – G/D
+      196.00, 0, 293.66, 0, 196.00, 0, 293.66, 0,
+      // Bar 5 – C/G
+      130.81, 0, 196.00, 0, 130.81, 0, 196.00, 0,
+      // Bar 6 – C/G
+      130.81, 0, 196.00, 0, 130.81, 0, 196.00, 0,
+      // Bar 7 – F/C → G/D
+      174.61, 0, 261.63, 0, 196.00, 0, 293.66, 0,
+      // Bar 8 – C/G
+      130.81, 0, 196.00, 0, 130.81, 0, 196.00, 0
     ];
 
     var totalDuration = melody.length * eighth;
 
-    // Schedule melody notes
+    // Melody (main voice)
     for (var i = 0; i < melody.length; i++) {
       if (melody[i] > 0) {
-        var osc = this._playTone(melody[i], eighth * 0.8, 'square', t + i * eighth, 0.06);
-        if (osc) this.musicNodes.push(osc);
+        var o1 = this._playTone(melody[i], eighth * 0.8, 'square', t + i * eighth, 0.06);
+        if (o1) this.musicNodes.push(o1);
       }
     }
 
-    // Schedule bass notes
+    // Harmony voice (softer, triangle)
+    for (var h = 0; h < harmony.length; h++) {
+      if (harmony[h] > 0) {
+        var o2 = this._playTone(harmony[h], eighth * 0.7, 'triangle', t + h * eighth, 0.028);
+        if (o2) this.musicNodes.push(o2);
+      }
+    }
+
+    // Oom-pah bass
     for (var j = 0; j < bass.length; j++) {
       if (bass[j] > 0) {
-        var osc2 = this._playTone(bass[j], eighth * 0.8, 'triangle', t + j * eighth, 0.05);
-        if (osc2) this.musicNodes.push(osc2);
+        var o3 = this._playTone(bass[j], eighth * 0.8, 'triangle', t + j * eighth, 0.05);
+        if (o3) this.musicNodes.push(o3);
       }
     }
 
-    // Schedule percussion (noise on beats)
-    for (var k = 0; k < melody.length; k += 4) {
-      this._playNoise(0.03, t + k * eighth, 0.04);
+    // Kick on beats 1&3, snare on beats 2&4 (every quarter note)
+    for (var k = 0; k < melody.length; k += 2) {
+      var pos8 = k % 8;
+      var kt = t + k * eighth;
+      if (pos8 === 0 || pos8 === 4) {
+        this._playTone(55, 0.08, 'sine', kt, 0.09);
+        this._playNoise(0.04, kt, 0.05);
+      } else {
+        this._playNoise(0.05, kt, 0.052);
+      }
     }
 
-    // Schedule next loop
     setTimeout(function() {
       self.musicNodes = [];
       if (self.musicPlaying) self._playMusicLoop();
@@ -489,7 +535,7 @@ window.ProcMario = window.ProcMario || {};
 
   // ===== THEME MUSIC LOOPS =====
 
-  // ── Underground: A-minor, slow, echo feel ──
+  // ── Underground: A-minor, echo feel, chromatic descending bass ──
   AudioManager.prototype._playUndergroundMusicLoop = function() {
     if (!this.ctx || !this.musicPlaying) return;
     var self  = this;
@@ -497,47 +543,67 @@ window.ProcMario = window.ProcMario || {};
     var bpm   = this.hurryUp ? 165 : 110;
     var eighth = (60 / bpm) / 2;
 
-    // Melody – A natural minor, dark descending phrases
+    // A natural minor – denser, chromatic phrases with echo
     var melody = [
-      220, 0, 220, 0, 261.63, 0, 220, 0,
-      196, 0, 0,   0, 196,    0, 174.61, 0,
-      196, 0, 220, 0, 246.94, 0, 220,    0,
-      0,   0, 196, 0, 196,    0, 0,      0,
-      220, 0, 261.63, 0, 293.66, 0, 261.63, 0,
-      220, 0, 0,      0, 196,    0, 0,      0,
-      174.61, 0, 196, 0, 220, 0, 196, 0,
-      174.61, 0, 0,   0, 0,   0, 0,   0
+      // Bar 1
+      440.00, 523.25, 0, 523.25, 440.00, 392.00, 349.23, 0,
+      // Bar 2
+      329.63, 0, 392.00, 0, 329.63, 293.66, 329.63, 0,
+      // Bar 3
+      349.23, 440.00, 0, 440.00, 349.23, 329.63, 293.66, 0,
+      // Bar 4 – descending chromatic
+      329.63, 0, 0, 293.66, 261.63, 246.94, 220.00, 0,
+      // Bar 5 – repeat
+      440.00, 523.25, 0, 523.25, 440.00, 392.00, 349.23, 0,
+      // Bar 6
+      329.63, 0, 293.66, 0, 261.63, 246.94, 261.63, 0,
+      // Bar 7 – chromatic descent to resolution
+      293.66, 329.63, 349.23, 329.63, 293.66, 261.63, 246.94, 0,
+      // Bar 8
+      220.00, 0, 0, 0, 0, 0, 0, 0
     ];
-    // Bass – sustained low drone
+
+    // Chromatic descending bass: A→Ab→G→F#→F→E→Eb→A (root + fifth)
     var bass = [
-      110, 0, 0, 0, 110, 0, 0, 0,
-      98,  0, 0, 0, 98,  0, 0, 0,
-      98,  0, 0, 0, 98,  0, 0, 0,
-      110, 0, 0, 0, 110, 0, 0, 0,
-      110, 0, 0, 0, 130.81, 0, 0, 0,
-      110, 0, 0, 0, 98,     0, 0, 0,
-      87.31, 0, 0, 0, 87.31, 0, 0, 0,
-      110,   0, 0, 0, 0,     0, 0, 0
+      // Bar 1: A2 + E3
+      110.00, 0, 164.81, 0, 110.00, 0, 164.81, 0,
+      // Bar 2: Ab2 + Eb3
+      103.83, 0, 155.56, 0, 103.83, 0, 155.56, 0,
+      // Bar 3: G2 + D3
+      98.00, 0, 146.83, 0, 98.00, 0, 146.83, 0,
+      // Bar 4: F#2 + C#3
+      92.50, 0, 138.59, 0, 92.50, 0, 138.59, 0,
+      // Bar 5: F2 + C3
+      87.31, 0, 130.81, 0, 87.31, 0, 130.81, 0,
+      // Bar 6: E2 + B2
+      82.41, 0, 123.47, 0, 82.41, 0, 123.47, 0,
+      // Bar 7: Eb2 + Bb2
+      77.78, 0, 116.54, 0, 77.78, 0, 116.54, 0,
+      // Bar 8: A2 (return)
+      110.00, 0, 0, 0, 0, 0, 0, 0
     ];
 
     var totalDuration = melody.length * eighth;
 
+    // Melody with echo effect
     for (var i = 0; i < melody.length; i++) {
       if (melody[i] > 0) {
         var o1 = this._playTone(melody[i], eighth * 0.9, 'triangle', t + i * eighth, 0.07);
         if (o1) this.musicNodes.push(o1);
-        // Echo: faint repeat slightly offset
         var o2 = this._playTone(melody[i], eighth * 0.7, 'triangle', t + i * eighth + 0.065, 0.03);
         if (o2) this.musicNodes.push(o2);
       }
     }
+
+    // Chromatic descending bass (sine for ominous sustain)
     for (var j = 0; j < bass.length; j++) {
       if (bass[j] > 0) {
         var o3 = this._playTone(bass[j], eighth * 1.8, 'sine', t + j * eighth, 0.08);
         if (o3) this.musicNodes.push(o3);
       }
     }
-    // Sparse percussion
+
+    // Sparse, eerie percussion (every 4 beats)
     for (var k = 0; k < melody.length; k += 8) {
       this._playNoise(0.04, t + k * eighth, 0.03);
     }
@@ -548,49 +614,92 @@ window.ProcMario = window.ProcMario || {};
     }, totalDuration * 1000);
   };
 
-  // ── Sky: G-major, bright, high octave ──
+  // ── Sky: G-major, bright, high octave, floating countermelody ──
   AudioManager.prototype._playSkyMusicLoop = function() {
     if (!this.ctx || !this.musicPlaying) return;
     var self   = this;
     var t      = this.ctx.currentTime + 0.05;
     var eighth = (60 / (this.hurryUp ? 225 : 150)) / 2;
 
+    // G major – dense, airy melody
     var melody = [
-      783.99, 0, 880, 0, 987.77, 0, 880, 0,
-      1046.5, 0, 0,   0, 880,    0, 0,   0,
-      783.99, 0, 740, 0, 659.25, 0, 740, 0,
-      783.99, 0, 0,   0, 0,      0, 0,   0,
-      659.25, 0, 740,    0, 783.99, 0, 880,    0,
-      987.77, 0, 0,      0, 1046.5, 0, 0,      0,
-      880,    0, 783.99, 0, 740,    0, 659.25, 0,
-      0,      0, 0,      0, 0,      0, 0,      0
+      // Bar 1 – G major ascending
+      783.99, 0, 987.77, 0, 880.00, 783.99, 0, 659.25,
+      // Bar 2
+      783.99, 880.00, 0, 783.99, 0, 587.33, 493.88, 0,
+      // Bar 3
+      880.00, 0, 783.99, 740.00, 0, 659.25, 587.33, 0,
+      // Bar 4
+      659.25, 587.33, 493.88, 0, 587.33, 0, 783.99, 0,
+      // Bar 5 – B section, higher register
+      987.77, 0, 880.00, 0, 783.99, 880.00, 987.77, 0,
+      // Bar 6
+      880.00, 783.99, 0, 740.00, 0, 783.99, 0, 659.25,
+      // Bar 7 – descending run
+      587.33, 659.25, 740.00, 783.99, 880.00, 0, 783.99, 0,
+      // Bar 8 – resolution
+      392.00, 0, 0, 0, 0, 0, 0, 0
     ];
+
+    // High arpeggio countermelody (sparse, very soft – floaty feel)
+    var counter = [
+      1046.50, 0, 0, 0, 1174.66, 0, 0, 0,
+      1318.50, 0, 0, 0, 1174.66, 0, 0, 0,
+      1174.66, 0, 0, 0, 1046.50, 0, 0, 0,
+      987.77,  0, 0, 0, 1046.50, 0, 0, 0,
+      1174.66, 0, 0, 0, 1318.50, 0, 0, 0,
+      1567.98, 0, 0, 0, 1318.50, 0, 0, 0,
+      1174.66, 0, 0, 0, 987.77,  0, 0, 0,
+      783.99,  0, 0, 0, 0,       0, 0, 0
+    ];
+
+    // G major oom-pah bass (root on beats 1&3, fifth on beats 2&4)
     var bass = [
-      196,    0, 196,    0, 220,    0, 196,    0,
-      261.63, 0, 261.63, 0, 196,    0, 196,    0,
-      185,    0, 185,    0, 164.81, 0, 185,    0,
-      196,    0, 196,    0, 196,    0, 196,    0,
-      164.81, 0, 164.81, 0, 196,    0, 220,    0,
-      246.94, 0, 246.94, 0, 261.63, 0, 246.94, 0,
-      220,    0, 196,    0, 185,    0, 164.81, 0,
-      196,    0, 196,    0, 196,    0, 196,    0
+      // Bar 1 – G/D
+      196.00, 0, 293.66, 0, 196.00, 0, 293.66, 0,
+      // Bar 2 – G/D with Am movement
+      196.00, 0, 293.66, 0, 220.00, 0, 329.63, 0,
+      // Bar 3 – F#/C# passing
+      185.00, 0, 277.18, 0, 185.00, 0, 277.18, 0,
+      // Bar 4 – G/D
+      196.00, 0, 293.66, 0, 196.00, 0, 293.66, 0,
+      // Bar 5 – B/F#
+      246.94, 0, 369.99, 0, 246.94, 0, 369.99, 0,
+      // Bar 6 – Am/E
+      220.00, 0, 329.63, 0, 220.00, 0, 329.63, 0,
+      // Bar 7 – C/G to D/A
+      130.81, 0, 196.00, 0, 196.00, 0, 293.66, 0,
+      // Bar 8 – G resolution
+      196.00, 0, 293.66, 0, 196.00, 0, 293.66, 0
     ];
 
     var totalDuration = melody.length * eighth;
 
+    // Main melody (square, bright)
     for (var i = 0; i < melody.length; i++) {
       if (melody[i] > 0) {
         var o1 = this._playTone(melody[i], eighth * 0.7, 'square', t + i * eighth, 0.05);
         if (o1) this.musicNodes.push(o1);
       }
     }
-    for (var j = 0; j < bass.length; j++) {
-      if (bass[j] > 0) {
-        var o2 = this._playTone(bass[j], eighth * 0.7, 'triangle', t + j * eighth, 0.05);
+
+    // High arpeggio countermelody (triangle, very soft)
+    for (var c = 0; c < counter.length; c++) {
+      if (counter[c] > 0) {
+        var o2 = this._playTone(counter[c], eighth * 1.8, 'triangle', t + c * eighth, 0.02);
         if (o2) this.musicNodes.push(o2);
       }
     }
-    // Light, airy percussion
+
+    // Oom-pah bass
+    for (var j = 0; j < bass.length; j++) {
+      if (bass[j] > 0) {
+        var o3 = this._playTone(bass[j], eighth * 0.7, 'triangle', t + j * eighth, 0.05);
+        if (o3) this.musicNodes.push(o3);
+      }
+    }
+
+    // Light, airy percussion (every beat)
     for (var k = 0; k < melody.length; k += 4) {
       this._playNoise(0.02, t + k * eighth, 0.025);
     }
@@ -601,33 +710,51 @@ window.ProcMario = window.ProcMario || {};
     }, totalDuration * 1000);
   };
 
-  // ── Castle: D-minor, ominous, driving ──
+  // ── Castle: D-minor, ominous, driving constant bass ──
   AudioManager.prototype._playCastleMusicLoop = function() {
     if (!this.ctx || !this.musicPlaying) return;
     var self   = this;
     var t      = this.ctx.currentTime + 0.05;
     var eighth = (60 / (this.hurryUp ? 232 : 155)) / 2;
 
+    // D minor – aggressive, denser melody
     var melody = [
-      293.66, 0, 293.66, 0, 349.23, 0, 293.66, 0,
-      261.63, 0, 0,      0, 261.63, 0, 0,      0,
-      293.66, 0, 329.63, 0, 349.23, 0, 329.63, 0,
-      293.66, 0, 0,      0, 0,      0, 0,      0,
-      233.08, 0, 233.08, 0, 261.63, 0, 293.66, 0,
-      329.63, 0, 0,      0, 349.23, 0, 0,      0,
-      293.66, 0, 261.63, 0, 233.08, 0, 220,    0,
-      220,    0, 0,      0, 0,      0, 0,      0
+      // Bar 1
+      587.33, 587.33, 698.46, 0, 880.00, 932.33, 0, 880.00,
+      // Bar 2
+      783.99, 0, 698.46, 0, 622.25, 0, 587.33, 0,
+      // Bar 3 – ascending run
+      698.46, 783.99, 880.00, 932.33, 880.00, 783.99, 698.46, 0,
+      // Bar 4 – descending
+      622.25, 587.33, 0, 523.25, 0, 466.16, 440.00, 0,
+      // Bar 5 – repeat
+      587.33, 587.33, 698.46, 0, 880.00, 932.33, 0, 880.00,
+      // Bar 6 – variant
+      783.99, 698.46, 622.25, 587.33, 523.25, 466.16, 523.25, 0,
+      // Bar 7 – intensifying
+      587.33, 622.25, 698.46, 622.25, 587.33, 523.25, 466.16, 0,
+      // Bar 8 – resolution
+      293.66, 0, 0, 0, 0, 0, 0, 0
     ];
-    // Heavy, low bass
+
+    // Constant 8th-note driving bass: D/A alternating, sawtooth
     var bass = [
-      73.42, 0, 73.42, 0, 73.42, 0, 73.42, 0,
-      65.41, 0, 65.41, 0, 65.41, 0, 65.41, 0,
-      73.42, 0, 73.42, 0, 87.31, 0, 73.42, 0,
-      73.42, 0, 73.42, 0, 73.42, 0, 73.42, 0,
-      58.27, 0, 58.27, 0, 65.41, 0, 73.42, 0,
-      82.41, 0, 82.41, 0, 87.31, 0, 82.41, 0,
-      73.42, 0, 65.41, 0, 58.27, 0, 55,    0,
-      55,    0, 55,    0, 55,    0, 55,    0
+      // Bar 1 – D/A
+      73.42, 110.00, 73.42, 110.00, 73.42, 110.00, 73.42, 73.42,
+      // Bar 2 – C/G
+      65.41, 98.00,  65.41, 98.00,  65.41, 98.00,  65.41, 65.41,
+      // Bar 3 – D/A
+      73.42, 110.00, 73.42, 110.00, 73.42, 110.00, 73.42, 73.42,
+      // Bar 4 – Bb/F → C/G → D
+      58.27, 87.31,  65.41, 98.00,  73.42, 110.00, 73.42, 73.42,
+      // Bar 5 – D/A
+      73.42, 110.00, 73.42, 110.00, 73.42, 110.00, 73.42, 73.42,
+      // Bar 6 – Bb/F and C/G descent
+      58.27, 87.31,  65.41, 98.00,  58.27, 87.31,  65.41, 98.00,
+      // Bar 7 – D/A building
+      73.42, 110.00, 73.42, 110.00, 73.42, 110.00, 73.42, 82.41,
+      // Bar 8 – D pedal
+      73.42, 73.42,  73.42, 73.42,  73.42, 73.42,  73.42, 73.42
     ];
 
     var totalDuration = melody.length * eighth;
@@ -638,15 +765,23 @@ window.ProcMario = window.ProcMario || {};
         if (o1) this.musicNodes.push(o1);
       }
     }
+
+    // Constant driving bass (all 64 slots)
     for (var j = 0; j < bass.length; j++) {
-      if (bass[j] > 0) {
-        var o2 = this._playTone(bass[j], eighth * 0.75, 'sawtooth', t + j * eighth, 0.07);
-        if (o2) this.musicNodes.push(o2);
-      }
+      var o2 = this._playTone(bass[j], eighth * 0.72, 'sawtooth', t + j * eighth, 0.065);
+      if (o2) this.musicNodes.push(o2);
     }
-    // Heavy percussion on every beat and off-beat
+
+    // Kick on beats 1&3, heavy snare on beats 2&4 (every quarter note)
     for (var k = 0; k < melody.length; k += 2) {
-      this._playNoise(0.045, t + k * eighth, k % 4 === 0 ? 0.07 : 0.035);
+      var pos8c = k % 8;
+      var ktc   = t + k * eighth;
+      if (pos8c === 0 || pos8c === 4) {
+        this._playTone(55, 0.09, 'sine', ktc, 0.10);
+        this._playNoise(0.05, ktc, 0.07);
+      } else {
+        this._playNoise(0.06, ktc, 0.065);
+      }
     }
 
     setTimeout(function() {
@@ -663,48 +798,66 @@ window.ProcMario = window.ProcMario || {};
     var bpm    = this.hurryUp ? 160 : 105;
     var eighth = (60 / bpm) / 2;
 
-    // Slow, flowing melody — D natural minor, legato feel
+    // D natural minor – improved density, legato flowing feel
     var melody = [
-      293.66, 0, 0, 329.63, 0, 349.23, 0, 0,
-      392.00, 0, 0, 0,      0, 349.23, 0, 0,
-      329.63, 0, 0, 293.66, 0, 0,      0, 261.63,
-      0,      0, 0, 0,      0, 0,      0, 0,
-      220,    0, 0, 261.63, 0, 293.66, 0, 0,
-      329.63, 0, 0, 0,      0, 293.66, 0, 0,
-      261.63, 0, 0, 220,    0, 0,      0, 196,
-      0,      0, 0, 0,      0, 0,      0, 0
+      // Bar 1
+      293.66, 0, 349.23, 0, 440.00, 0, 392.00, 0,
+      // Bar 2
+      349.23, 329.63, 293.66, 0, 261.63, 0, 293.66, 0,
+      // Bar 3
+      329.63, 0, 293.66, 0, 261.63, 246.94, 261.63, 0,
+      // Bar 4 – breath
+      293.66, 0, 0, 261.63, 0, 0, 0, 0,
+      // Bar 5
+      220.00, 0, 261.63, 0, 293.66, 0, 349.23, 0,
+      // Bar 6
+      329.63, 293.66, 261.63, 0, 246.94, 0, 261.63, 0,
+      // Bar 7
+      293.66, 329.63, 0, 349.23, 0, 329.63, 293.66, 0,
+      // Bar 8
+      146.83, 0, 0, 0, 0, 0, 0, 0
     ];
-    // Gentle ripple arpeggio in bass (D-minor triad, sparse)
+
+    // D minor ripple arpeggio bass (D-F-A chord tones)
     var bass = [
-      146.83, 0, 174.61, 0, 146.83, 0, 174.61, 0,
+      // Bar 1: D-F-A ripple
+      146.83, 0, 174.61, 0, 220.00, 0, 174.61, 0,
+      // Bar 2: D sustained
+      146.83, 0, 130.81, 0, 146.83, 0, 174.61, 0,
+      // Bar 3: Bb chord
+      123.47, 0, 146.83, 0, 174.61, 0, 146.83, 0,
+      // Bar 4: C
       130.81, 0, 164.81, 0, 130.81, 0, 164.81, 0,
-      130.81, 0, 164.81, 0, 196,    0, 164.81, 0,
-      146.83, 0, 146.83, 0, 146.83, 0, 146.83, 0,
-      110,    0, 130.81, 0, 110,    0, 130.81, 0,
-      98,     0, 110,    0, 98,     0, 110,    0,
-      87.31,  0, 98,     0, 110,    0, 98,     0,
-      87.31,  0, 87.31,  0, 87.31,  0, 87.31,  0
+      // Bar 5: A minor
+      110.00, 0, 130.81, 0, 164.81, 0, 130.81, 0,
+      // Bar 6: Bb
+      116.54, 0, 146.83, 0, 174.61, 0, 146.83, 0,
+      // Bar 7: C moving to D
+      130.81, 0, 164.81, 0, 146.83, 0, 174.61, 0,
+      // Bar 8: D resolution
+      146.83, 0, 0, 0, 0, 0, 0, 0
     ];
 
     var totalDuration = melody.length * eighth;
 
-    // Melody: sine for a soft, underwater timbre
+    // Melody: sine for soft, underwater timbre; octave shimmer
     for (var i = 0; i < melody.length; i++) {
       if (melody[i] > 0) {
         var o1 = this._playTone(melody[i], eighth * 1.6, 'sine', t + i * eighth, 0.055);
         if (o1) this.musicNodes.push(o1);
-        // Soft shimmer: faint octave-up overlay
         var o2 = this._playTone(melody[i] * 2, eighth * 1.0, 'sine', t + i * eighth, 0.018);
         if (o2) this.musicNodes.push(o2);
       }
     }
-    // Bass: sine, long notes for a resonant deep-water feel
+
+    // Bass: sine, long resonant notes
     for (var j = 0; j < bass.length; j++) {
       if (bass[j] > 0) {
         var o3 = this._playTone(bass[j], eighth * 1.8, 'sine', t + j * eighth, 0.06);
         if (o3) this.musicNodes.push(o3);
       }
     }
+
     // Very soft, infrequent percussion (bubbles)
     for (var k = 0; k < melody.length; k += 8) {
       this._playNoise(0.015, t + k * eighth, 0.03);
